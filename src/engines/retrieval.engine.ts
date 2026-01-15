@@ -110,8 +110,8 @@ export class RetrievalEngine {
         filters?: SearchFilters,
         minScore?: number
     ): Promise<SearchResult[]> {
-        // Generate query embedding
-        const { embedding } = await this.gemini.embed(query);
+        // Generate query embedding with RETRIEVAL_QUERY task type
+        const { embedding } = await this.gemini.embedQuery(query);
 
         // Search in vector database
         const results = await this.chunkRepo.searchSemantic(

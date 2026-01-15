@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, type GenerativeModel, type Part } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerativeModel, type Part, TaskType } from '@google/generative-ai';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { TokenUsage } from '../types/chunk.types.js';
 import { RateLimitError } from '../errors/index.js';
@@ -22,12 +22,24 @@ export interface EmbeddingResponse {
 }
 
 /**
+ * Embedding task type for optimized embeddings
+ * @see https://ai.google.dev/gemini-api/docs/embeddings
+ */
+export type EmbeddingTaskType =
+    | 'RETRIEVAL_DOCUMENT'  // For documents to be indexed
+    | 'RETRIEVAL_QUERY'     // For search queries
+    | 'SEMANTIC_SIMILARITY' // For similarity comparison
+    | 'CLASSIFICATION'      // For classification tasks
+    | 'CLUSTERING';         // For clustering tasks
+
+/**
  * Gemini API service wrapper
  */
 export class GeminiService {
     private readonly genAI: GoogleGenerativeAI;
     private readonly model: GenerativeModel;
     private readonly embeddingModel: GenerativeModel;
+    private readonly config: ResolvedConfig;
     private readonly rateLimiter: RateLimiter;
     private readonly logger: Logger;
 
@@ -35,6 +47,7 @@ export class GeminiService {
         this.genAI = new GoogleGenerativeAI(config.geminiApiKey);
         this.model = this.genAI.getGenerativeModel({ model: config.model });
         this.embeddingModel = this.genAI.getGenerativeModel({ model: config.embeddingModel });
+        this.config = config;
         this.rateLimiter = rateLimiter;
         this.logger = logger;
     }
@@ -61,8 +74,8 @@ export class GeminiService {
                     },
                 ],
                 generationConfig: {
-                    temperature: options?.temperature ?? 0.3,
-                    maxOutputTokens: options?.maxOutputTokens ?? 8192,
+                    temperature: options?.temperature ?? this.config.generationConfig.temperature,
+                    maxOutputTokens: options?.maxOutputTokens ?? this.config.generationConfig.maxOutputTokens,
                 },
             });
 
@@ -82,7 +95,7 @@ export class GeminiService {
             };
         } catch (error) {
             this.handleError(error as Error);
-            throw error; // Re-throw after handling
+            throw error;
         }
     }
 
@@ -108,8 +121,8 @@ export class GeminiService {
                     },
                 ],
                 generationConfig: {
-                    temperature: options?.temperature ?? 0.3,
-                    maxOutputTokens: options?.maxOutputTokens ?? 8192,
+                    temperature: options?.temperature ?? this.config.generationConfig.temperature,
+                    maxOutputTokens: options?.maxOutputTokens ?? this.config.generationConfig.maxOutputTokens,
                 },
             });
 
@@ -134,13 +147,25 @@ export class GeminiService {
     }
 
     /**
-     * Generate embeddings for text
+     * Generate embeddings for text with task type
+     * 
+     * Best practices:
+     * - Use RETRIEVAL_DOCUMENT for documents being indexed
+     * - Use RETRIEVAL_QUERY for search queries
+     * 
+     * @see https://ai.google.dev/gemini-api/docs/embeddings
      */
-    async embed(text: string): Promise<EmbeddingResponse> {
+    async embed(
+        text: string,
+        taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT'
+    ): Promise<EmbeddingResponse> {
         await this.rateLimiter.acquire();
 
         try {
-            const result = await this.embeddingModel.embedContent(text);
+            const result = await this.embeddingModel.embedContent({
+                content: { parts: [{ text }], role: 'user' },
+                taskType: this.mapTaskType(taskType),
+            });
 
             this.rateLimiter.reportSuccess();
 
@@ -155,17 +180,48 @@ export class GeminiService {
     }
 
     /**
-     * Generate embeddings for multiple texts (batch)
+     * Generate embeddings for documents (for indexing)
+     * Uses RETRIEVAL_DOCUMENT task type
+     */
+    async embedDocument(text: string): Promise<EmbeddingResponse> {
+        return this.embed(text, 'RETRIEVAL_DOCUMENT');
+    }
+
+    /**
+     * Generate embeddings for search query
+     * Uses RETRIEVAL_QUERY task type
+     */
+    async embedQuery(text: string): Promise<EmbeddingResponse> {
+        return this.embed(text, 'RETRIEVAL_QUERY');
+    }
+
+    /**
+     * Generate embeddings for multiple documents (batch)
+     * Uses RETRIEVAL_DOCUMENT task type
      */
     async embedBatch(texts: string[]): Promise<EmbeddingResponse[]> {
         const results: EmbeddingResponse[] = [];
 
         for (const text of texts) {
-            const result = await this.embed(text);
+            const result = await this.embedDocument(text);
             results.push(result);
         }
 
         return results;
+    }
+
+    /**
+     * Map our task type enum to Gemini's TaskType
+     */
+    private mapTaskType(taskType: EmbeddingTaskType): TaskType {
+        const mapping: Record<EmbeddingTaskType, TaskType> = {
+            'RETRIEVAL_DOCUMENT': TaskType.RETRIEVAL_DOCUMENT,
+            'RETRIEVAL_QUERY': TaskType.RETRIEVAL_QUERY,
+            'SEMANTIC_SIMILARITY': TaskType.SEMANTIC_SIMILARITY,
+            'CLASSIFICATION': TaskType.CLASSIFICATION,
+            'CLUSTERING': TaskType.CLUSTERING,
+        };
+        return mapping[taskType];
     }
 
     /**

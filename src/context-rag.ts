@@ -31,6 +31,7 @@ import {
     DEFAULT_BATCH_CONFIG,
     DEFAULT_CHUNK_CONFIG,
     DEFAULT_RATE_LIMIT_CONFIG,
+    DEFAULT_GENERATION_CONFIG,
     DEFAULT_LOG_CONFIG,
 } from './types/config.types.js';
 import { ConfigurationError, NotFoundError } from './errors/index.js';
@@ -129,6 +130,10 @@ export class ContextRAG {
             geminiApiKey: userConfig.geminiApiKey,
             model: userConfig.model ?? 'gemini-1.5-pro',
             embeddingModel: userConfig.embeddingModel ?? 'text-embedding-004',
+            generationConfig: {
+                ...DEFAULT_GENERATION_CONFIG,
+                ...userConfig.generationConfig,
+            },
             batchConfig: {
                 ...DEFAULT_BATCH_CONFIG,
                 ...userConfig.batchConfig,

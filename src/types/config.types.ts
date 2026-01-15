@@ -56,6 +56,16 @@ export interface LogConfig {
 }
 
 /**
+ * Generation configuration for Gemini API
+ */
+export interface GenerationConfig {
+    /** Temperature for generation (0-2, default: 0.3) */
+    temperature: number;
+    /** Maximum output tokens (default: 8192) */
+    maxOutputTokens: number;
+}
+
+/**
  * Main Context-RAG configuration
  */
 export interface ContextRAGConfig {
@@ -67,6 +77,8 @@ export interface ContextRAGConfig {
     model?: 'gemini-1.5-pro' | 'gemini-1.5-flash' | 'gemini-2.0-flash-exp';
     /** Embedding model (default: 'text-embedding-004') */
     embeddingModel?: string;
+    /** Generation configuration (temperature, maxOutputTokens) */
+    generationConfig?: Partial<GenerationConfig>;
     /** Batch processing configuration */
     batchConfig?: Partial<BatchConfig>;
     /** Chunk configuration */
@@ -85,6 +97,7 @@ export interface ResolvedConfig {
     geminiApiKey: string;
     model: string;
     embeddingModel: string;
+    generationConfig: GenerationConfig;
     batchConfig: BatchConfig;
     chunkConfig: ChunkConfig;
     rateLimitConfig: RateLimitConfig;
@@ -110,6 +123,11 @@ export const DEFAULT_CHUNK_CONFIG: ChunkConfig = {
 export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
     requestsPerMinute: 60,
     adaptive: true,
+};
+
+export const DEFAULT_GENERATION_CONFIG: GenerationConfig = {
+    temperature: 0.3,
+    maxOutputTokens: 8192,
 };
 
 export const DEFAULT_LOG_CONFIG: LogConfig = {
