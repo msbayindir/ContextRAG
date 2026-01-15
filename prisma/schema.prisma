@@ -1,0 +1,204 @@
+// This is a reference schema for Context-RAG
+// Users should copy these models to their own schema.prisma
+// or use `npx context-rag init` to add them automatically
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ============================================
+// Context-RAG Models
+// ============================================
+
+/// Stores prompt configurations for different document types
+/// Each document type can have multiple versions for A/B testing
+model ContextRagPromptConfig {
+  id            String   @id @default(uuid())
+  
+  /// Document type identifier (e.g., "Medical", "Legal", "Technical")
+  documentType  String
+  
+  /// Human-readable name for this configuration
+  name          String
+  
+  /// System prompt used for AI processing
+  systemPrompt  String   @db.Text
+  
+  /// Chunking strategy configuration as JSON
+  /// { maxTokens: number, overlapTokens: number, splitBy: string, ... }
+  chunkStrategy Json
+  
+  /// Version number for this document type (incremental)
+  version       Int      @default(1)
+  
+  /// Whether this configuration is active
+  isActive      Boolean  @default(true)
+  
+  /// Whether this is the default config for the document type
+  isDefault     Boolean  @default(false)
+  
+  /// Who created this: 'discovery' | 'manual' | user ID
+  createdBy     String?
+  
+  /// Reason for changes / changelog entry
+  changeLog     String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  /// Related chunks created with this config
+  chunks ContextRagChunk[]
+
+  @@unique([documentType, version])
+  @@index([documentType, isActive])
+  @@map("context_rag_prompt_configs")
+}
+
+/// Stores vector chunks for semantic search
+model ContextRagChunk {
+  id             String   @id @default(uuid())
+  
+  /// Reference to the prompt config used to create this chunk
+  promptConfigId String
+  promptConfig   ContextRagPromptConfig @relation(fields: [promptConfigId], references: [id], onDelete: Cascade)
+  
+  /// Reference to the source document
+  documentId     String
+  
+  /// Sequential index of this chunk within the document
+  chunkIndex     Int
+  
+  /// Type of content: TEXT, TABLE, LIST, CODE, HEADING, IMAGE_REF, QUOTE, MIXED
+  chunkType      String
+
+  /// Plain text content optimized for vector search
+  searchContent  String   @db.Text
+  
+  /// Vector embedding (768 dimensions for Gemini)
+  searchVector   Unsupported("vector(768)")
+  
+  /// Rich Markdown content for display
+  displayContent String   @db.Text
+
+  /// Starting page number in source document
+  sourcePageStart Int
+  
+  /// Ending page number in source document
+  sourcePageEnd   Int
+  
+  /// Confidence score from AI processing (0.0 - 1.0)
+  confidenceScore Float    @default(0.5)
+  
+  /// Additional metadata as JSON
+  /// { page, pageRange, type, confidence, tokens, keywords, ... }
+  metadata        Json
+
+  createdAt DateTime @default(now())
+
+  @@index([promptConfigId])
+  @@index([documentId])
+  @@index([chunkType])
+  @@index([confidenceScore])
+  @@map("context_rag_chunks")
+}
+
+/// Tracks document processing state
+model ContextRagDocument {
+  id           String   @id @default(uuid())
+  
+  /// Original filename
+  filename     String
+  
+  /// SHA-256 hash for deduplication
+  fileHash     String   @unique
+  
+  /// File size in bytes
+  fileSize     Int
+  
+  /// Total page count
+  pageCount    Int
+  
+  /// Document type (matches PromptConfig.documentType)
+  documentType String?
+  
+  /// Processing status: PENDING, DISCOVERING, AWAITING_APPROVAL, PROCESSING, COMPLETED, FAILED, PARTIAL
+  status       String   @default("PENDING")
+
+  /// Reference to prompt config used for processing
+  promptConfigId   String?
+  
+  /// Batch processing statistics
+  totalBatches     Int @default(0)
+  completedBatches Int @default(0)
+  failedBatches    Int @default(0)
+
+  /// Total token usage as JSON { input, output, total }
+  tokenUsage   Json?
+  
+  /// Total processing time in milliseconds
+  processingMs Int?
+  
+  /// Error message if failed
+  errorMessage String?
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  /// Related batch jobs
+  batches ContextRagBatch[]
+
+  @@index([status])
+  @@index([fileHash])
+  @@index([documentType])
+  @@map("context_rag_documents")
+}
+
+/// Tracks individual batch processing jobs
+model ContextRagBatch {
+  id         String @id @default(uuid())
+  
+  /// Reference to parent document
+  documentId String
+  document   ContextRagDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  /// Sequential batch index (0-based)
+  batchIndex Int
+  
+  /// Starting page of this batch
+  pageStart  Int
+  
+  /// Ending page of this batch
+  pageEnd    Int
+  
+  /// Batch status: PENDING, PROCESSING, RETRYING, COMPLETED, FAILED
+  status     String @default("PENDING")
+  
+  /// Number of retry attempts
+  retryCount Int    @default(0)
+  
+  /// Last error message if failed
+  lastError  String?
+
+  /// Token usage for this batch as JSON
+  tokenUsage   Json?
+  
+  /// Processing time in milliseconds
+  processingMs Int?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([documentId, batchIndex])
+  @@index([documentId, status])
+  @@index([status])
+  @@map("context_rag_batches")
+}
