@@ -1,31 +1,65 @@
-# Context-RAG
+# 🧠 Context-RAG
 
-> A powerful, multimodal RAG engine with contextual retrieval, auto-prompt discovery, and PostgreSQL-native vector search.
+**A powerful, multimodal RAG engine with contextual retrieval, auto-prompt discovery, and PostgreSQL-native vector search.**
 
 [![npm version](https://badge.fury.io/js/context-rag.svg)](https://www.npmjs.com/package/context-rag)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![CI](https://github.com/your-username/context-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/context-rag/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 
-## ✨ Features
+---
 
-- **🔍 Discovery Agent** - AI automatically analyzes documents and suggests optimal chunking strategies
-- **📄 Multimodal PDF Processing** - Uses Gemini Vision API to understand tables, charts, and layouts
-- **📝 Markdown Output** - Tables and lists converted to rich Markdown format
-- **🎯 Contextual Retrieval** - Separate search and display content for optimal results
-- **🐘 PostgreSQL Native** - No external vector DB needed, uses pgvector
-- **🔄 Hybrid Search** - Combines semantic and keyword search
-- **⚡ Batch Processing** - Concurrent processing with automatic retry
-- **📊 Progress Events** - Type-safe event emitter for real-time progress tracking
+## ✨ Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🔍 **Discovery Agent** | AI automatically analyzes documents and suggests optimal chunking strategies |
+| 📄 **Multimodal Processing** | Uses Gemini Vision API to understand tables, charts, and layouts |
+| 📝 **Markdown Output** | Tables and lists converted to rich Markdown format |
+| 🎯 **Contextual Retrieval** | Separate search and display content for optimal results |
+| 🐘 **PostgreSQL Native** | No external vector DB needed, uses pgvector |
+| 🔄 **Hybrid Search** | Combines semantic and keyword search |
+| ⚡ **Batch Processing** | Concurrent processing with automatic retry |
+| 📊 **Progress Events** | Type-safe event emitter for real-time tracking |
+
+---
 
 ## 📦 Installation
 
 ```bash
+# npm
 npm install context-rag
-# or
+
+# pnpm
 pnpm add context-rag
+
+# yarn
+yarn add context-rag
 ```
 
+### Prerequisites
+
+- Node.js 18+
+- PostgreSQL with [pgvector](https://github.com/pgvector/pgvector) extension
+- Gemini API key
+
+---
+
 ## 🚀 Quick Start
+
+### 1. Setup Database
+
+```bash
+# Add Context-RAG models to your Prisma schema
+npx context-rag init
+
+# Enable pgvector extension
+psql -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# Run migrations
+npx prisma migrate dev
+```
+
+### 2. Initialize & Use
 
 ```typescript
 import { ContextRAG } from 'context-rag';
@@ -33,78 +67,39 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Initialize the RAG engine
 const rag = new ContextRAG({
   prisma,
   geminiApiKey: process.env.GEMINI_API_KEY!,
 });
 
-// Option 1: Auto-discover strategy
-const strategy = await rag.discover({ file: pdfBuffer });
-console.log(`Detected: ${strategy.documentType} (${strategy.confidence * 100}% confidence)`);
+// 🔍 Discover optimal strategy
+const strategy = await rag.discover({ file: './document.pdf' });
+console.log(`Detected: ${strategy.documentType} (${Math.round(strategy.confidence * 100)}% confidence)`);
+
+// ✅ Approve and create config
 await rag.approveStrategy(strategy.id);
 
-// Option 2: Use custom prompt
-await rag.createPromptConfig({
-  documentType: 'Medical',
-  name: 'Medical Documents',
-  systemPrompt: 'Extract medical information with focus on medications, dosages, and conditions...',
-  chunkStrategy: {
-    maxTokens: 800,
-    overlapTokens: 100,
-    preserveTables: true,
-  },
-});
-
-// Ingest document with progress tracking
+// 📥 Ingest document
 const result = await rag.ingest({
-  file: pdfBuffer,
-  documentType: 'Medical',
+  file: './document.pdf',
   onProgress: (status) => {
-    console.log(`Processing batch ${status.current}/${status.total} (pages ${status.pageRange?.start}-${status.pageRange?.end})`);
+    console.log(`Batch ${status.current}/${status.total}`);
   },
 });
 
-console.log(`Created ${result.chunkCount} chunks`);
-
-// Search with hybrid mode
+// 🔎 Search
 const results = await rag.search({
-  query: 'What medications affect kidney function?',
+  query: 'What are the key findings?',
   mode: 'hybrid',
   limit: 10,
-  filters: {
-    documentTypes: ['Medical'],
-    minConfidence: 0.7,
-  },
 });
 
-for (const result of results) {
-  console.log(`Score: ${result.score.toFixed(2)}`);
-  console.log(result.chunk.displayContent);
-}
+results.forEach((r) => {
+  console.log(`[${r.score.toFixed(2)}] ${r.chunk.displayContent.slice(0, 100)}...`);
+});
 ```
 
-## 🛠️ Setup
-
-### 1. Initialize Prisma Schema
-
-```bash
-npx context-rag init
-```
-
-This will add the required models to your Prisma schema.
-
-### 2. Enable pgvector
-
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
-### 3. Run migrations
-
-```bash
-npx prisma migrate dev
-```
+---
 
 ## ⚙️ Configuration
 
@@ -114,53 +109,56 @@ const rag = new ContextRAG({
   prisma: prismaClient,
   geminiApiKey: 'your-api-key',
 
-  // Optional - Model selection
-  model: 'gemini-1.5-pro', // or 'gemini-1.5-flash', 'gemini-2.0-flash-exp'
+  // Model selection
+  model: 'gemini-1.5-pro',           // 'gemini-1.5-flash' | 'gemini-2.0-flash-exp'
   embeddingModel: 'text-embedding-004',
 
-  // Optional - Batch processing
+  // Batch processing
   batchConfig: {
-    pagesPerBatch: 15,    // Pages per batch
-    maxConcurrency: 3,    // Parallel batches
-    maxRetries: 3,        // Retry attempts
-    retryDelayMs: 1000,   // Initial retry delay
-    backoffMultiplier: 2, // Exponential backoff
+    pagesPerBatch: 15,
+    maxConcurrency: 3,
+    maxRetries: 3,
+    retryDelayMs: 1000,
+    backoffMultiplier: 2,
   },
 
-  // Optional - Chunking
+  // Chunking
   chunkConfig: {
     maxTokens: 500,
     overlapTokens: 50,
   },
 
-  // Optional - Rate limiting
+  // Rate limiting
   rateLimitConfig: {
     requestsPerMinute: 60,
-    adaptive: true, // Auto-adjust on 429 errors
+    adaptive: true,
   },
 
-  // Optional - Logging
+  // Logging
   logging: {
-    level: 'info', // 'debug' | 'info' | 'warn' | 'error'
+    level: 'info',
     structured: true,
   },
 });
 ```
+
+---
 
 ## 📚 API Reference
 
 ### Discovery
 
 ```typescript
-// Analyze document and get AI-suggested strategy
+// Analyze document
 const strategy = await rag.discover({
-  file: pdfBuffer, // or file path
+  file: pdfBuffer,           // Buffer or file path
   documentTypeHint: 'Medical', // Optional hint
 });
 
-// Approve with optional overrides
-const config = await rag.approveStrategy(strategy.id, {
-  documentType: 'Custom Type', // Override suggested type
+// Approve with overrides
+await rag.approveStrategy(strategy.id, {
+  documentType: 'Custom Type',
+  chunkStrategy: { maxTokens: 1000 },
 });
 ```
 
@@ -168,20 +166,21 @@ const config = await rag.approveStrategy(strategy.id, {
 
 ```typescript
 // Create custom config
-const config = await rag.createPromptConfig({
+await rag.createPromptConfig({
   documentType: 'Legal',
   name: 'Legal Contracts',
-  systemPrompt: 'Extract contract clauses...',
+  systemPrompt: 'Extract contract clauses with attention to...',
+  chunkStrategy: {
+    maxTokens: 800,
+    preserveTables: true,
+  },
   setAsDefault: true,
 });
 
 // List configs
-const configs = await rag.getPromptConfigs({
-  documentType: 'Legal',
-  activeOnly: true,
-});
+const configs = await rag.getPromptConfigs({ documentType: 'Legal' });
 
-// Activate specific version
+// Activate version
 await rag.activatePromptConfig(configId);
 ```
 
@@ -190,50 +189,50 @@ await rag.activatePromptConfig(configId);
 ```typescript
 const result = await rag.ingest({
   file: pdfBuffer,
-  filename: 'document.pdf',
+  filename: 'report.pdf',
   documentType: 'Medical',
-  promptConfigId: 'specific-config-id', // Optional
-  skipExisting: true, // Skip if already processed
+  skipExisting: true,
   onProgress: (status) => {
-    console.log(`Batch ${status.current}/${status.total}: ${status.status}`);
+    console.log(`${status.status}: pages ${status.pageRange.start}-${status.pageRange.end}`);
   },
 });
 
-// Check status
-const status = await rag.getDocumentStatus(result.documentId);
+// Result
+// {
+//   documentId: 'uuid',
+//   status: 'COMPLETED',
+//   chunkCount: 42,
+//   batchCount: 5,
+//   processingMs: 12500,
+// }
 ```
 
 ### Search
 
 ```typescript
-// Basic search
-const results = await rag.search({
-  query: 'your search query',
-});
+// Simple
+const results = await rag.search({ query: 'your query' });
 
-// Advanced search
+// Advanced
 const results = await rag.search({
-  query: 'your search query',
-  mode: 'hybrid', // 'semantic' | 'keyword' | 'hybrid'
+  query: 'medication interactions',
+  mode: 'hybrid',              // 'semantic' | 'keyword' | 'hybrid'
   limit: 20,
   minScore: 0.5,
   filters: {
-    documentTypes: ['Medical', 'Legal'],
+    documentTypes: ['Medical'],
     chunkTypes: ['TABLE', 'TEXT'],
     minConfidence: 0.8,
-    documentIds: ['specific-doc-id'],
   },
   typeBoost: {
-    TABLE: 1.5, // Boost tables
-    LIST: 1.2,  // Boost lists
+    TABLE: 1.5,
+    LIST: 1.2,
   },
   includeExplanation: true,
 });
 
-// With full metadata
-const response = await rag.searchWithMetadata({
-  query: 'your query',
-});
+// With metadata
+const response = await rag.searchWithMetadata({ query: 'your query' });
 console.log(`Found ${response.metadata.totalFound} in ${response.metadata.processingTimeMs}ms`);
 ```
 
@@ -244,7 +243,7 @@ console.log(`Found ${response.metadata.totalFound} in ${response.metadata.proces
 const health = await rag.healthCheck();
 // { status: 'healthy', database: true, pgvector: true }
 
-// Get statistics
+// Statistics
 const stats = await rag.getStats();
 // { totalDocuments: 10, totalChunks: 500, promptConfigs: 3, storageBytes: 1024000 }
 
@@ -252,11 +251,50 @@ const stats = await rag.getStats();
 await rag.deleteDocument(documentId);
 ```
 
-## 🧪 Testing
+---
+
+## 🧪 Development
 
 ```bash
+# Install dependencies
+pnpm install
+
+# Run tests
 pnpm test
+
+# Build
+pnpm build
+
+# Lint
+pnpm lint
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+context-rag/
+├── src/
+│   ├── context-rag.ts       # Main class
+│   ├── engines/             # Ingestion, Retrieval, Discovery
+│   ├── services/            # Gemini API, PDF Processor
+│   ├── database/            # Repository pattern
+│   ├── types/               # TypeScript types & Zod schemas
+│   ├── utils/               # Logger, Retry, RateLimiter
+│   └── errors/              # Custom error classes
+├── tests/                   # Unit tests (59 tests)
+├── prisma/                  # Reference schema
+└── .github/workflows/       # CI/CD
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our contributing guidelines before submitting a PR.
+
+---
 
 ## 📄 License
 
