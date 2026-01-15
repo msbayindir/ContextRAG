@@ -6,3 +6,4 @@ export * from './search.types.js';
 export * from './discovery.types.js';
 export * from './ingestion.types.js';
 export * from './prompt.types.js';
+export * from './schemas.js';
