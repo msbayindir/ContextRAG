@@ -1,12 +1,12 @@
-import type { PrismaClientLike } from '../types/config.types.js';
+import type { PrismaClientLike } from '../../types/config.types.js';
 import type {
     PromptConfig,
     CreatePromptConfig,
     PromptConfigFilters,
-} from '../types/prompt.types.js';
-import type { ChunkStrategy } from '../types/chunk.types.js';
-import { DEFAULT_CHUNK_STRATEGY } from '../types/prompt.types.js';
-import { DatabaseError, NotFoundError } from '../errors/index.js';
+} from '../../types/prompt.types.js';
+import type { ChunkStrategy } from '../../types/chunk.types.js';
+import { DEFAULT_CHUNK_STRATEGY } from '../../types/prompt.types.js';
+import { DatabaseError, NotFoundError } from '../../errors/index.js';
 
 /**
  * Repository for PromptConfig CRUD operations

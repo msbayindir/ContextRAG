@@ -1,7 +1,7 @@
-import type { PrismaClientLike } from '../types/config.types.js';
-import { BatchStatusEnum } from '../types/enums.js';
-import type { TokenUsage } from '../types/chunk.types.js';
-import { DatabaseError, NotFoundError } from '../errors/index.js';
+import type { PrismaClientLike } from '../../types/config.types.js';
+import { BatchStatusEnum } from '../../types/enums.js';
+import type { TokenUsage } from '../../types/chunk.types.js';
+import { DatabaseError, NotFoundError } from '../../errors/index.js';
 
 interface CreateBatchInput {
     documentId: string;

@@ -1,7 +1,7 @@
-import type { PrismaClientLike } from '../types/config.types.js';
-import type { VectorChunk, CreateChunkInput, ChunkType } from '../types/chunk.types.js';
-import type { SearchFilters } from '../types/search.types.js';
-import { DatabaseError } from '../errors/index.js';
+import type { PrismaClientLike } from '../../types/config.types.js';
+import type { VectorChunk, CreateChunkInput, ChunkType } from '../../types/chunk.types.js';
+import type { SearchFilters } from '../../types/search.types.js';
+import { DatabaseError } from '../../errors/index.js';
 
 interface ChunkSearchResult {
     chunk: VectorChunk;

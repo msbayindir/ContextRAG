@@ -33,9 +33,22 @@ import {
     DEFAULT_RATE_LIMIT_CONFIG,
     DEFAULT_LOG_CONFIG,
 } from './types/config.types.js';
-import { ConfigurationError } from './errors/index.js';
-import { createLogger, generateCorrelationId, RateLimiter } from './utils/index.js';
+import { ConfigurationError, NotFoundError } from './errors/index.js';
+import { createLogger, RateLimiter } from './utils/index.js';
 import type { Logger } from './utils/logger.js';
+import {
+    PromptConfigRepository,
+    DocumentRepository,
+    ChunkRepository,
+} from './database/index.js';
+import {
+    checkDatabaseConnection,
+    checkPgVectorExtension,
+    getDatabaseStats,
+} from './database/utils.js';
+import { IngestionEngine } from './engines/ingestion.engine.js';
+import { RetrievalEngine } from './engines/retrieval.engine.js';
+import { DiscoveryEngine } from './engines/discovery.engine.js';
 
 /**
  * Main Context-RAG engine class
@@ -63,6 +76,16 @@ export class ContextRAG {
     private readonly logger: Logger;
     private readonly rateLimiter: RateLimiter;
 
+    // Engines
+    private readonly ingestionEngine: IngestionEngine;
+    private readonly retrievalEngine: RetrievalEngine;
+    private readonly discoveryEngine: DiscoveryEngine;
+
+    // Repositories
+    private readonly promptConfigRepo: PromptConfigRepository;
+    private readonly documentRepo: DocumentRepository;
+    private readonly chunkRepo: ChunkRepository;
+
     constructor(userConfig: ContextRAGConfig) {
         // Validate config
         const validation = configSchema.safeParse(userConfig);
@@ -80,6 +103,16 @@ export class ContextRAG {
 
         // Initialize rate limiter
         this.rateLimiter = new RateLimiter(this.config.rateLimitConfig);
+
+        // Initialize repositories
+        this.promptConfigRepo = new PromptConfigRepository(this.config.prisma);
+        this.documentRepo = new DocumentRepository(this.config.prisma);
+        this.chunkRepo = new ChunkRepository(this.config.prisma);
+
+        // Initialize engines
+        this.ingestionEngine = new IngestionEngine(this.config, this.rateLimiter, this.logger);
+        this.retrievalEngine = new RetrievalEngine(this.config, this.rateLimiter, this.logger);
+        this.discoveryEngine = new DiscoveryEngine(this.config, this.rateLimiter, this.logger);
 
         this.logger.info('Context-RAG initialized', {
             model: this.config.model,
@@ -122,45 +155,54 @@ export class ContextRAG {
         return this.config;
     }
 
-    /**
-     * Get the rate limiter instance
-     */
-    getRateLimiter(): RateLimiter {
-        return this.rateLimiter;
-    }
-
     // ============================================
     // DISCOVERY METHODS
     // ============================================
 
     /**
      * Analyze a document and get AI-suggested processing strategy
-     *
-     * @param options - Discovery options
-     * @returns Discovery result with suggested prompt and strategy
      */
-    async discover(_options: DiscoveryOptions): Promise<DiscoveryResult> {
-        const correlationId = generateCorrelationId();
-        this.logger.info('Starting document discovery', { correlationId });
-
-        // TODO: Implement discovery engine
-        throw new Error('Discovery not yet implemented');
+    async discover(options: DiscoveryOptions): Promise<DiscoveryResult> {
+        return this.discoveryEngine.discover(options);
     }
 
     /**
      * Approve a discovery strategy and create a prompt config
-     *
-     * @param strategyId - ID of the discovery result
-     * @param _overrides - Optional overrides for the suggested config
      */
     async approveStrategy(
         strategyId: string,
-        _overrides?: ApproveStrategyOptions
+        overrides?: ApproveStrategyOptions
     ): Promise<PromptConfig> {
-        this.logger.info('Approving strategy', { strategyId });
+        const session = this.discoveryEngine.getSession(strategyId);
 
-        // TODO: Implement strategy approval
-        throw new Error('Strategy approval not yet implemented');
+        if (!session) {
+            throw new NotFoundError('Discovery session', strategyId);
+        }
+
+        const result = session.result;
+
+        // Create prompt config with optional overrides
+        const promptConfig = await this.promptConfigRepo.create({
+            documentType: overrides?.documentType ?? result.documentType,
+            name: overrides?.name ?? result.documentTypeName,
+            systemPrompt: overrides?.systemPrompt ?? result.suggestedPrompt,
+            chunkStrategy: {
+                ...result.suggestedChunkStrategy,
+                ...overrides?.chunkStrategy,
+            },
+            setAsDefault: true,
+            changeLog: overrides?.changeLog ?? `Auto-generated from discovery (confidence: ${result.confidence})`,
+        });
+
+        // Remove session after successful approval
+        this.discoveryEngine.removeSession(strategyId);
+
+        this.logger.info('Strategy approved', {
+            strategyId,
+            promptConfigId: promptConfig.id,
+        });
+
+        return promptConfig;
     }
 
     // ============================================
@@ -169,54 +211,46 @@ export class ContextRAG {
 
     /**
      * Create a custom prompt configuration
-     *
-     * @param config - Prompt configuration to create
-     * @returns Created prompt config
      */
     async createPromptConfig(config: CreatePromptConfig): Promise<PromptConfig> {
-        this.logger.info('Creating prompt config', {
-            documentType: config.documentType,
-            name: config.name,
-        });
-
-        // TODO: Implement prompt config creation
-        throw new Error('Prompt config creation not yet implemented');
+        return this.promptConfigRepo.create(config);
     }
 
     /**
      * Get prompt configurations
-     *
-     * @param _filters - Optional filters
-     * @returns List of prompt configs
      */
-    async getPromptConfigs(_filters?: PromptConfigFilters): Promise<PromptConfig[]> {
-        // TODO: Implement prompt config retrieval
-        throw new Error('Prompt config retrieval not yet implemented');
+    async getPromptConfigs(filters?: PromptConfigFilters): Promise<PromptConfig[]> {
+        return this.promptConfigRepo.getMany(filters);
     }
 
     /**
      * Update a prompt configuration (creates new version)
-     *
-     * @param _id - Prompt config ID
-     * @param _updates - Updates to apply
-     * @returns New version of the config
      */
     async updatePromptConfig(
-        _id: string,
-        _updates: UpdatePromptConfig
+        id: string,
+        updates: UpdatePromptConfig
     ): Promise<PromptConfig> {
-        // TODO: Implement prompt config update
-        throw new Error('Prompt config update not yet implemented');
+        const existing = await this.promptConfigRepo.getById(id);
+
+        // Create new version with updates
+        return this.promptConfigRepo.create({
+            documentType: existing.documentType,
+            name: updates.name ?? existing.name,
+            systemPrompt: updates.systemPrompt ?? existing.systemPrompt,
+            chunkStrategy: {
+                ...existing.chunkStrategy,
+                ...updates.chunkStrategy,
+            },
+            setAsDefault: true,
+            changeLog: updates.changeLog ?? `Updated from version ${existing.version}`,
+        });
     }
 
     /**
      * Activate a specific prompt config version
-     *
-     * @param _id - Prompt config ID to activate
      */
-    async activatePromptConfig(_id: string): Promise<void> {
-        // TODO: Implement prompt config activation
-        throw new Error('Prompt config activation not yet implemented');
+    async activatePromptConfig(id: string): Promise<void> {
+        return this.promptConfigRepo.activate(id);
     }
 
     // ============================================
@@ -225,44 +259,32 @@ export class ContextRAG {
 
     /**
      * Ingest a document into the RAG system
-     *
-     * @param options - Ingestion options
-     * @returns Ingestion result
      */
     async ingest(options: IngestOptions): Promise<IngestResult> {
-        const correlationId = generateCorrelationId();
-        this.logger.info('Starting document ingestion', {
-            correlationId,
-            documentType: options.documentType,
-        });
-
-        // TODO: Implement ingestion engine
-        throw new Error('Ingestion not yet implemented');
+        return this.ingestionEngine.ingest(options);
     }
 
     /**
      * Get the status of a document processing job
-     *
-     * @param _documentId - Document ID
-     * @returns Document status
      */
-    async getDocumentStatus(_documentId: string): Promise<DocumentStatus> {
-        // TODO: Implement document status retrieval
-        throw new Error('Document status retrieval not yet implemented');
+    async getDocumentStatus(documentId: string): Promise<DocumentStatus> {
+        return this.documentRepo.getById(documentId);
     }
 
     /**
      * Retry failed batches for a document
-     *
-     * @param _documentId - Document ID
-     * @param _options - Retry options
      */
     async retryFailedBatches(
-        _documentId: string,
+        documentId: string,
         _options?: RetryOptions
     ): Promise<IngestResult> {
-        // TODO: Implement batch retry
-        throw new Error('Batch retry not yet implemented');
+        // Get the document to get the file info
+        const doc = await this.documentRepo.getById(documentId);
+
+        // For now, throw an error - full implementation would require storing the file
+        throw new Error(
+            `Retry not yet fully implemented. Document ${doc.id} has ${doc.progress.failedBatches} failed batches.`
+        );
     }
 
     // ============================================
@@ -271,40 +293,16 @@ export class ContextRAG {
 
     /**
      * Search for relevant content
-     *
-     * @param options - Search options
-     * @returns Search results
      */
     async search(options: SearchOptions): Promise<SearchResult[]> {
-        const correlationId = generateCorrelationId();
-        this.logger.info('Starting search', {
-            correlationId,
-            query: options.query.substring(0, 50),
-            mode: options.mode,
-        });
-
-        // TODO: Implement retrieval engine
-        throw new Error('Search not yet implemented');
+        return this.retrievalEngine.search(options);
     }
 
     /**
      * Search with full metadata response
-     *
-     * @param options - Search options
-     * @returns Full search response with metadata
      */
     async searchWithMetadata(options: SearchOptions): Promise<SearchResponse> {
-        const startTime = Date.now();
-        const results = await this.search(options);
-
-        return {
-            results,
-            metadata: {
-                totalFound: results.length,
-                processingTimeMs: Date.now() - startTime,
-                searchMode: options.mode ?? 'hybrid',
-            },
-        };
+        return this.retrievalEngine.searchWithMetadata(options);
     }
 
     // ============================================
@@ -313,14 +311,15 @@ export class ContextRAG {
 
     /**
      * Delete a document and all its chunks
-     *
-     * @param _documentId - Document ID to delete
      */
-    async deleteDocument(_documentId: string): Promise<void> {
-        this.logger.info('Deleting document', { documentId: _documentId });
+    async deleteDocument(documentId: string): Promise<void> {
+        this.logger.info('Deleting document', { documentId });
 
-        // TODO: Implement document deletion
-        throw new Error('Document deletion not yet implemented');
+        // Delete chunks first
+        await this.chunkRepo.deleteByDocumentId(documentId);
+
+        // Delete document (will cascade delete batches)
+        await this.documentRepo.delete(documentId);
     }
 
     /**
@@ -332,8 +331,13 @@ export class ContextRAG {
         promptConfigs: number;
         storageBytes: number;
     }> {
-        // TODO: Implement stats retrieval
-        throw new Error('Stats retrieval not yet implemented');
+        const stats = await getDatabaseStats(this.config.prisma);
+        return {
+            totalDocuments: stats.documents,
+            totalChunks: stats.chunks,
+            promptConfigs: stats.promptConfigs,
+            storageBytes: stats.totalStorageBytes,
+        };
     }
 
     /**
@@ -342,9 +346,28 @@ export class ContextRAG {
     async healthCheck(): Promise<{
         status: 'healthy' | 'degraded' | 'unhealthy';
         database: boolean;
-        geminiApi: boolean;
+        pgvector: boolean;
     }> {
-        // TODO: Implement health check
-        throw new Error('Health check not yet implemented');
+        const database = await checkDatabaseConnection(this.config.prisma);
+        let pgvector = false;
+
+        if (database) {
+            try {
+                pgvector = await checkPgVectorExtension(this.config.prisma);
+            } catch {
+                pgvector = false;
+            }
+        }
+
+        let status: 'healthy' | 'degraded' | 'unhealthy';
+        if (database && pgvector) {
+            status = 'healthy';
+        } else if (database) {
+            status = 'degraded';
+        } else {
+            status = 'unhealthy';
+        }
+
+        return { status, database, pgvector };
     }
 }

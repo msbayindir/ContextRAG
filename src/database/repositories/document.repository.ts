@@ -1,8 +1,8 @@
-import type { PrismaClientLike } from '../types/config.types.js';
-import type { DocumentStatus, BatchResult } from '../types/ingestion.types.js';
-import type { TokenUsage } from '../types/chunk.types.js';
-import { DocumentStatusEnum, BatchStatusEnum } from '../types/enums.js';
-import { DatabaseError, NotFoundError } from '../errors/index.js';
+import type { PrismaClientLike } from '../../types/config.types.js';
+import type { DocumentStatus } from '../../types/ingestion.types.js';
+import type { TokenUsage } from '../../types/chunk.types.js';
+import { DocumentStatusEnum } from '../../types/enums.js';
+import { DatabaseError, NotFoundError } from '../../errors/index.js';
 
 interface CreateDocumentInput {
     filename: string;
