@@ -9,7 +9,7 @@ dist/
 .idea/
 *.swp
 *.swo
-
+examples/test.pdf
 # OS
 .DS_Store
 Thumbs.db

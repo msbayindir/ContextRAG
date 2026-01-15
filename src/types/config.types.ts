@@ -74,7 +74,14 @@ export interface ContextRAGConfig {
     /** Gemini API key */
     geminiApiKey: string;
     /** Gemini model to use (default: 'gemini-1.5-pro') */
-    model?: 'gemini-1.5-pro' | 'gemini-1.5-flash' | 'gemini-2.0-flash-exp';
+    model?:
+    | 'gemini-1.5-pro'
+    | 'gemini-1.5-flash'
+    | 'gemini-2.0-flash-exp'
+    | 'gemini-pro'
+    | 'gemini-2.5-pro'
+    | 'gemini-3-pro-preview'
+    | 'gemini-3-flash-preview';
     /** Embedding model (default: 'text-embedding-004') */
     embeddingModel?: string;
     /** Generation configuration (temperature, maxOutputTokens) */
@@ -140,7 +147,15 @@ export const DEFAULT_LOG_CONFIG: LogConfig = {
  */
 export const configSchema = z.object({
     geminiApiKey: z.string().min(1, 'Gemini API key is required'),
-    model: z.enum(['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash-exp']).optional(),
+    model: z.enum([
+        'gemini-1.5-pro',
+        'gemini-1.5-flash',
+        'gemini-2.0-flash-exp',
+        'gemini-pro',
+        'gemini-2.5-pro',
+        'gemini-3-pro-preview',
+        'gemini-3-flash-preview'
+    ]).optional(),
     embeddingModel: z.string().optional(),
     batchConfig: z
         .object({
