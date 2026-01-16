@@ -1,6 +1,7 @@
 {
   "name": "context-rag",
   "version": "0.1.0",
+  "type": "module",
   "description": "A powerful, multimodal RAG engine with contextual retrieval, auto-prompt discovery, and PostgreSQL-native vector search",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -71,6 +72,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/node": "^22.10.7",
     "@types/pdf-parse": "^1.1.4",
     "@typescript-eslint/eslint-plugin": "^8.21.0",
