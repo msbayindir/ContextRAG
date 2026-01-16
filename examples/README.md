@@ -15,6 +15,7 @@
    
    # Install pgvector extension
    psql -d context_rag_demo -c "CREATE EXTENSION IF NOT EXISTS vector"
+   
    ```
 
 2. **Environment Variables**
