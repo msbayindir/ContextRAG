@@ -185,11 +185,16 @@ export class ContextRAG {
 
         const result = session.result;
 
+        // Build system prompt from specialInstructions or use override/deprecated suggestedPrompt
+        const systemPrompt = overrides?.systemPrompt
+            ?? result.suggestedPrompt
+            ?? result.specialInstructions.join('\n');
+
         // Create prompt config with optional overrides
         const promptConfig = await this.promptConfigRepo.create({
             documentType: overrides?.documentType ?? result.documentType,
             name: overrides?.name ?? result.documentTypeName,
-            systemPrompt: overrides?.systemPrompt ?? result.suggestedPrompt,
+            systemPrompt,
             chunkStrategy: {
                 ...result.suggestedChunkStrategy,
                 ...overrides?.chunkStrategy,

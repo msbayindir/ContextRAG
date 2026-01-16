@@ -7,7 +7,7 @@ import type {
     BatchResult,
 } from '../types/ingestion.types.js';
 import type { CreateChunkInput, TokenUsage } from '../types/chunk.types.js';
-import { BatchStatusEnum, DocumentStatusEnum, ChunkTypeEnum, type ChunkTypeEnumType } from '../types/enums.js';
+import { BatchStatusEnum, DocumentStatusEnum } from '../types/enums.js';
 import { DocumentRepository } from '../database/repositories/document.repository.js';
 import { BatchRepository } from '../database/repositories/batch.repository.js';
 import { ChunkRepository } from '../database/repositories/chunk.repository.js';
@@ -17,30 +17,22 @@ import { PDFProcessor } from '../services/pdf.processor.js';
 import { withRetry, getRetryOptions } from '../utils/retry.js';
 import type { Logger } from '../utils/logger.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
-
-/**
- * System prompt for content extraction
- */
-const EXTRACTION_SYSTEM_PROMPT = `You are a document processing AI. Your task is to extract and structure content from the given document pages.
-
-Instructions:
-1. Extract all text content, preserving structure
-2. Convert tables to Markdown table format
-3. Convert lists to Markdown list format
-4. Preserve headings with appropriate # levels
-5. Note any images or figures with [IMAGE: description]
-6. Maintain the logical flow of content
-
-Output format:
-- Use clean Markdown formatting
-- Each distinct section should be clearly separated
-- Tables must use | column | format |
-- Include page numbers in comments like <!-- Page X -->
-
-Be thorough and accurate. Do not summarize or skip content.`;
+import {
+    buildExtractionPrompt,
+    DEFAULT_DOCUMENT_INSTRUCTIONS
+} from '../config/templates.js';
+import {
+    parseSections,
+    hasValidSections,
+    parseFallbackContent,
+    cleanForSearch
+} from '../utils/chunk-parser.js';
 
 /**
  * Ingestion engine for processing documents
+ * 
+ * Uses structured template system for consistent output format
+ * with <!-- SECTION --> markers for reliable parsing.
  */
 export class IngestionEngine {
     private readonly config: ResolvedConfig;
@@ -103,16 +95,34 @@ export class IngestionEngine {
             }
         }
 
-        // Get or create prompt config
+        // Get document-specific instructions
+        let documentInstructions: string[] = [];
+        let exampleFormats: Record<string, string> | undefined;
         let promptConfigId: string | undefined = options.promptConfigId;
-        let systemPrompt = options.customPrompt ?? EXTRACTION_SYSTEM_PROMPT;
 
         if (!promptConfigId && options.documentType) {
             const promptConfig = await this.promptConfigRepo.getDefault(options.documentType);
             if (promptConfig) {
                 promptConfigId = promptConfig.id;
-                systemPrompt = promptConfig.systemPrompt;
+                // Parse instructions from systemPrompt (stored as newline-separated)
+                documentInstructions = promptConfig.systemPrompt
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0);
             }
+        }
+
+        // Use custom prompt or default instructions
+        if (options.customPrompt) {
+            documentInstructions = options.customPrompt
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+        } else if (documentInstructions.length === 0) {
+            documentInstructions = DEFAULT_DOCUMENT_INSTRUCTIONS
+                .split('\n')
+                .map(line => line.replace(/^-\s*/, '').trim())
+                .filter(line => line.length > 0);
         }
 
         // Create batches
@@ -151,7 +161,8 @@ export class IngestionEngine {
         const batchResults = await this.processBatchesConcurrently(
             documentId,
             buffer,
-            systemPrompt,
+            documentInstructions,
+            exampleFormats,
             promptConfigId ?? 'default',
             options.onProgress
         );
@@ -210,7 +221,8 @@ export class IngestionEngine {
     private async processBatchesConcurrently(
         documentId: string,
         pdfBuffer: Buffer,
-        systemPrompt: string,
+        documentInstructions: string[],
+        exampleFormats: Record<string, string> | undefined,
         promptConfigId: string,
         onProgress?: (status: BatchStatus) => void
     ): Promise<BatchResult[]> {
@@ -226,7 +238,8 @@ export class IngestionEngine {
                 this.processSingleBatch(
                     batch,
                     pdfBuffer,
-                    systemPrompt,
+                    documentInstructions,
+                    exampleFormats,
                     promptConfigId,
                     documentId,
                     batches.length,
@@ -247,7 +260,8 @@ export class IngestionEngine {
     private async processSingleBatch(
         batch: { id: string; batchIndex: number; pageStart: number; pageEnd: number },
         pdfBuffer: Buffer,
-        systemPrompt: string,
+        documentInstructions: string[],
+        exampleFormats: Record<string, string> | undefined,
         promptConfigId: string,
         documentId: string,
         totalBatches: number,
@@ -273,13 +287,15 @@ export class IngestionEngine {
                 async () => {
                     // Create vision part from PDF
                     const pdfPart = this.pdfProcessor.createVisionPart(pdfBuffer);
-                    const pageRange = this.pdfProcessor.getPageRangeDescription(
+
+                    // Build structured extraction prompt using template
+                    const prompt = buildExtractionPrompt(
+                        documentInstructions,
+                        exampleFormats,
                         batch.pageStart,
                         batch.pageEnd
                     );
 
-                    // Generate content with vision
-                    const prompt = `${systemPrompt}\n\nProcess ${pageRange} of this document.`;
                     const response = await this.gemini.generateWithVision(prompt, [pdfPart]);
 
                     return response;
@@ -304,7 +320,7 @@ export class IngestionEngine {
                 }
             );
 
-            // Parse and create chunks
+            // Parse AI output using structured section parser
             const chunks = this.parseContentToChunks(
                 result.text,
                 promptConfigId,
@@ -376,6 +392,8 @@ export class IngestionEngine {
 
     /**
      * Parse extracted content into chunks
+     * Uses structured <!-- SECTION --> markers when available,
+     * falls back to legacy parsing for compatibility.
      */
     private parseContentToChunks(
         content: string,
@@ -386,72 +404,70 @@ export class IngestionEngine {
     ): CreateChunkInput[] {
         const chunks: CreateChunkInput[] = [];
 
-        // Split content by sections (double newlines or headers)
-        const sections = content.split(/\n(?=#{1,6}\s)|(?:\n\n)/);
+        // Try structured section parsing first
+        if (hasValidSections(content)) {
+            const sections = parseSections(content);
 
-        let chunkIndex = 0;
+            this.logger.debug('Using structured section parser', {
+                sectionCount: sections.length,
+            });
+
+            for (const section of sections) {
+                if (section.content.length < 10) continue;
+
+                chunks.push({
+                    promptConfigId,
+                    documentId,
+                    chunkIndex: section.index,
+                    chunkType: section.type,
+                    searchContent: cleanForSearch(section.content),
+                    displayContent: section.content,
+                    sourcePageStart: section.page,
+                    sourcePageEnd: section.page,
+                    confidenceScore: section.confidence,
+                    metadata: {
+                        type: section.type,
+                        pageRange: { start: section.page, end: section.page },
+                        confidence: {
+                            score: section.confidence,
+                            category: section.confidence >= 0.8 ? 'HIGH' :
+                                section.confidence >= 0.5 ? 'MEDIUM' : 'LOW'
+                        },
+                        parsedWithStructuredMarkers: true,
+                    },
+                });
+            }
+
+            return chunks;
+        }
+
+        // Fallback to legacy parsing
+        this.logger.debug('Using fallback parser (no structured markers found)');
+
+        const sections = parseFallbackContent(content, pageStart, pageEnd);
+
         for (const section of sections) {
-            const trimmed = section.trim();
-            if (!trimmed || trimmed.length < 10) continue;
-
-            // Detect chunk type
-            const chunkType = this.detectChunkType(trimmed);
+            if (section.content.length < 10) continue;
 
             chunks.push({
                 promptConfigId,
                 documentId,
-                chunkIndex: chunkIndex++,
-                chunkType,
-                searchContent: this.cleanForSearch(trimmed),
-                displayContent: trimmed,
+                chunkIndex: section.index,
+                chunkType: section.type,
+                searchContent: cleanForSearch(section.content),
+                displayContent: section.content,
                 sourcePageStart: pageStart,
                 sourcePageEnd: pageEnd,
-                confidenceScore: 0.8, // Default, could be enhanced
+                confidenceScore: section.confidence,
                 metadata: {
-                    type: chunkType,
+                    type: section.type,
                     pageRange: { start: pageStart, end: pageEnd },
-                    confidence: { score: 0.8, category: 'HIGH' },
+                    confidence: { score: section.confidence, category: 'MEDIUM' },
+                    parsedWithStructuredMarkers: false,
                 },
             });
         }
 
         return chunks;
-    }
-
-    /**
-     * Detect the type of content in a chunk
-     */
-    private detectChunkType(content: string): ChunkTypeEnumType {
-        if (content.includes('|') && content.includes('---')) {
-            return ChunkTypeEnum.TABLE;
-        }
-        if (/^[-*]\s/.test(content) || /^\d+\.\s/.test(content)) {
-            return ChunkTypeEnum.LIST;
-        }
-        if (content.startsWith('```')) {
-            return ChunkTypeEnum.CODE;
-        }
-        if (/^#{1,6}\s/.test(content)) {
-            return ChunkTypeEnum.HEADING;
-        }
-        if (content.startsWith('>')) {
-            return ChunkTypeEnum.QUOTE;
-        }
-        return ChunkTypeEnum.TEXT;
-    }
-
-    /**
-     * Clean content for search (remove formatting)
-     */
-    private cleanForSearch(content: string): string {
-        return content
-            .replace(/#{1,6}\s/g, '') // Remove heading markers
-            .replace(/\*\*/g, '') // Remove bold
-            .replace(/\*/g, '') // Remove italic
-            .replace(/`/g, '') // Remove code markers
-            .replace(/\|/g, ' ') // Replace table pipes with spaces
-            .replace(/---+/g, '') // Remove hr
-            .replace(/\s+/g, ' ') // Normalize whitespace
-            .trim();
     }
 }

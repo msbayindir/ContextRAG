@@ -53,6 +53,8 @@ export interface ChunkMetadata {
     section?: string;
     /** Keywords extracted from content */
     keywords?: string[];
+    /** Whether parsed with structured SECTION markers */
+    parsedWithStructuredMarkers?: boolean;
     /** Custom metadata added by user */
     custom?: Record<string, unknown>;
 }

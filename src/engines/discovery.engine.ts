@@ -11,49 +11,7 @@ import type { Logger } from '../utils/logger.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
 import { generateCorrelationId } from '../utils/index.js';
 import { DEFAULT_CHUNK_STRATEGY } from '../types/prompt.types.js';
-
-/**
- * Discovery prompt for document analysis
- */
-const DISCOVERY_PROMPT = `You are a document analysis AI. Analyze the provided document and determine the optimal processing strategy.
-
-Analyze the document and provide:
-1. Document Type: What kind of document is this? (e.g., Medical, Legal, Technical, Financial, Academic, etc.)
-2. Structure Analysis:
-   - Are there tables? How many approximately?
-   - Are there lists (bulleted/numbered)?
-   - Are there code blocks?
-   - Are there images/charts/figures?
-   - Are there forms?
-3. Content Organization: How is content organized? (chapters, sections, articles, etc.)
-4. Language and Complexity: What is the language and technical level?
-5. Recommended Processing Strategy:
-   - How should this document be chunked? (by page, section, paragraph, table)
-   - What should be the ideal chunk size?
-   - Should tables be kept intact or split?
-   - Any special handling needed?
-
-Respond in JSON format:
-{
-  "documentType": "string",
-  "documentTypeName": "Human readable name",
-  "detectedElements": [
-    { "type": "table|list|code|image|chart|form|heading", "count": number, "examples": [page_numbers] }
-  ],
-  "language": "string",
-  "complexity": "low|medium|high",
-  "organization": "description of how content is organized",
-  "suggestedPrompt": "The system prompt to use for processing this document",
-  "suggestedChunkStrategy": {
-    "maxTokens": number,
-    "overlapTokens": number,
-    "splitBy": "page|section|paragraph|semantic",
-    "preserveTables": boolean,
-    "preserveLists": boolean
-  },
-  "confidence": number (0-1),
-  "reasoning": "explanation of why this strategy was chosen"
-}`;
+import { buildDiscoveryPrompt } from '../config/templates.js';
 
 /**
  * Discovery session storage
@@ -67,7 +25,26 @@ interface DiscoverySession {
 }
 
 /**
+ * Parsed discovery response from AI
+ */
+interface DiscoveryAIResponse {
+    documentType: string;
+    documentTypeName: string;
+    language?: string;
+    complexity?: 'low' | 'medium' | 'high';
+    detectedElements: DetectedElement[];
+    specialInstructions: string[];
+    exampleFormats?: Record<string, string>;
+    chunkStrategy?: Partial<ChunkStrategy>;
+    confidence: number;
+    reasoning: string;
+}
+
+/**
  * Discovery engine for automatic prompt generation
+ * 
+ * Uses structured template system to analyze documents and generate
+ * document-specific extraction instructions.
  */
 export class DiscoveryEngine {
     private readonly gemini: GeminiService;
@@ -99,25 +76,14 @@ export class DiscoveryEngine {
         // Create vision part for analysis
         const pdfPart = this.pdfProcessor.createVisionPart(buffer);
 
-        // Build prompt
-        let prompt = DISCOVERY_PROMPT;
-        if (options.documentTypeHint) {
-            prompt += `\n\nHint: The user expects this to be a "${options.documentTypeHint}" document.`;
-        }
+        // Build discovery prompt from template
+        const prompt = buildDiscoveryPrompt(options.documentTypeHint);
 
         // Call Gemini with full document
         const response = await this.gemini.generateWithVision(prompt, [pdfPart]);
 
         // Parse response
-        let analysisResult: {
-            documentType: string;
-            documentTypeName: string;
-            detectedElements: DetectedElement[];
-            suggestedPrompt: string;
-            suggestedChunkStrategy: Partial<ChunkStrategy>;
-            confidence: number;
-            reasoning: string;
-        };
+        let analysisResult: DiscoveryAIResponse;
 
         try {
             // Extract JSON from response (handle markdown code blocks)
@@ -126,7 +92,16 @@ export class DiscoveryEngine {
             if (jsonMatch?.[1]) {
                 jsonStr = jsonMatch[1];
             }
-            analysisResult = JSON.parse(jsonStr);
+            analysisResult = JSON.parse(jsonStr) as DiscoveryAIResponse;
+
+            // Validate required fields
+            if (!analysisResult.documentType) {
+                throw new Error('Missing documentType in response');
+            }
+            if (!Array.isArray(analysisResult.specialInstructions)) {
+                // Fallback: convert old suggestedPrompt to instructions if present
+                analysisResult.specialInstructions = this.getDefaultInstructions();
+            }
         } catch (parseError) {
             this.logger.warn('Failed to parse discovery response as JSON, using defaults', {
                 error: (parseError as Error).message,
@@ -137,8 +112,8 @@ export class DiscoveryEngine {
                 documentType: options.documentTypeHint ?? 'General',
                 documentTypeName: options.documentTypeHint ?? 'General Document',
                 detectedElements: [],
-                suggestedPrompt: this.getDefaultPrompt(),
-                suggestedChunkStrategy: DEFAULT_CHUNK_STRATEGY,
+                specialInstructions: this.getDefaultInstructions(),
+                chunkStrategy: DEFAULT_CHUNK_STRATEGY,
                 confidence: 0.5,
                 reasoning: 'Failed to parse AI response, using default configuration',
             };
@@ -149,14 +124,15 @@ export class DiscoveryEngine {
             id: correlationId,
             documentType: analysisResult.documentType,
             documentTypeName: analysisResult.documentTypeName,
-            detectedElements: analysisResult.detectedElements,
-            suggestedPrompt: analysisResult.suggestedPrompt,
+            detectedElements: analysisResult.detectedElements ?? [],
+            specialInstructions: analysisResult.specialInstructions,
+            exampleFormats: analysisResult.exampleFormats,
             suggestedChunkStrategy: {
                 ...DEFAULT_CHUNK_STRATEGY,
-                ...analysisResult.suggestedChunkStrategy,
+                ...analysisResult.chunkStrategy,
             },
-            confidence: analysisResult.confidence,
-            reasoning: analysisResult.reasoning,
+            confidence: analysisResult.confidence ?? 0.5,
+            reasoning: analysisResult.reasoning ?? '',
             pageCount: metadata.pageCount,
             fileHash: metadata.fileHash,
             createdAt: new Date(),
@@ -179,6 +155,7 @@ export class DiscoveryEngine {
             correlationId,
             documentType: discoveryResult.documentType,
             confidence: discoveryResult.confidence,
+            instructionCount: discoveryResult.specialInstructions.length,
         });
 
         return discoveryResult;
@@ -215,19 +192,16 @@ export class DiscoveryEngine {
     }
 
     /**
-     * Get default extraction prompt
+     * Get default extraction instructions
      */
-    private getDefaultPrompt(): string {
-        return `You are a document processing AI. Extract and structure all content from the document.
-
-Instructions:
-1. Extract all text content, preserving structure
-2. Convert tables to Markdown table format using | column | format
-3. Convert lists to Markdown list format
-4. Preserve headings with appropriate # levels
-5. Note any images with [IMAGE: description]
-6. Maintain logical flow of content
-
-Output clean, well-formatted Markdown.`;
+    private getDefaultInstructions(): string[] {
+        return [
+            'Extract all text content preserving structure',
+            'Convert tables to Markdown table format',
+            'Convert lists to Markdown list format',
+            'Preserve headings with appropriate # levels',
+            'Note any images with [IMAGE: description]',
+            'Maintain the logical flow of content',
+        ];
     }
 }

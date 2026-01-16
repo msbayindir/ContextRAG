@@ -36,8 +36,12 @@ export interface DiscoveryResult {
     documentTypeName: string;
     /** Detected structural elements */
     detectedElements: DetectedElement[];
-    /** AI-generated system prompt for ingestion */
-    suggestedPrompt: string;
+    /** Document-specific extraction instructions (NEW) */
+    specialInstructions: string[];
+    /** Example formats for consistent extraction (NEW) */
+    exampleFormats?: Record<string, string>;
+    /** AI-generated system prompt for ingestion (DEPRECATED - use specialInstructions) */
+    suggestedPrompt?: string;
     /** Suggested chunking strategy */
     suggestedChunkStrategy: ChunkStrategy;
     /** AI confidence in this analysis (0.0 - 1.0) */

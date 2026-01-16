@@ -16,3 +16,13 @@ export { RateLimiter } from './rate-limiter.js';
 
 export { ContextRAGEventEmitter, createEventEmitter } from './events.js';
 export type { ContextRAGEvents } from './events.js';
+
+export {
+    parseSections,
+    hasValidSections,
+    parseFallbackContent,
+    cleanForSearch,
+    processSection,
+} from './chunk-parser.js';
+export type { ParsedSection, ProcessedChunk } from './chunk-parser.js';
+

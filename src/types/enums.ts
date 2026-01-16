@@ -10,6 +10,7 @@ export const ChunkTypeEnum = {
     HEADING: 'HEADING',
     IMAGE_REF: 'IMAGE_REF',
     QUOTE: 'QUOTE',
+    QUESTION: 'QUESTION',
     MIXED: 'MIXED',
 } as const;
 
