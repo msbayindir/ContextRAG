@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, type GenerativeModel, type Part, TaskType } from '@google/generative-ai';
+import { GoogleAIFileManager } from '@google/generative-ai/server';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { TokenUsage } from '../types/chunk.types.js';
 import { RateLimitError } from '../errors/index.js';
@@ -37,6 +38,7 @@ export type EmbeddingTaskType =
  */
 export class GeminiService {
     private readonly genAI: GoogleGenerativeAI;
+    private readonly fileManager: GoogleAIFileManager;
     private readonly model: GenerativeModel;
     private readonly embeddingModel: GenerativeModel;
     private readonly config: ResolvedConfig;
@@ -45,6 +47,7 @@ export class GeminiService {
 
     constructor(config: ResolvedConfig, rateLimiter: RateLimiter, logger: Logger) {
         this.genAI = new GoogleGenerativeAI(config.geminiApiKey);
+        this.fileManager = new GoogleAIFileManager(config.geminiApiKey);
         this.model = this.genAI.getGenerativeModel({ model: config.model });
         this.embeddingModel = this.genAI.getGenerativeModel({ model: config.embeddingModel });
         this.config = config;
@@ -222,6 +225,136 @@ export class GeminiService {
             'CLUSTERING': TaskType.CLUSTERING,
         };
         return mapping[taskType];
+    }
+
+    /**
+     * Simple text generation (single prompt)
+     * Used for context generation in RAG enhancement
+     */
+    async generateSimple(prompt: string): Promise<string> {
+        await this.rateLimiter.acquire();
+
+        try {
+            const result = await this.model.generateContent({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [{ text: prompt }],
+                    },
+                ],
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 200, // Short context
+                },
+            });
+
+            this.rateLimiter.reportSuccess();
+            return result.response.text().trim();
+        } catch (error) {
+            this.handleError(error as Error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generate content with file reference (for contextual retrieval)
+     * Uses Gemini's file caching for efficiency
+     */
+    async generateWithFileRef(fileUri: string, prompt: string): Promise<string> {
+        await this.rateLimiter.acquire();
+
+        try {
+            const result = await this.model.generateContent({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            { fileData: { mimeType: 'application/pdf', fileUri } },
+                            { text: prompt },
+                        ],
+                    },
+                ],
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 200,
+                },
+            });
+
+            this.rateLimiter.reportSuccess();
+            return result.response.text().trim();
+        } catch (error) {
+            this.handleError(error as Error);
+            throw error;
+        }
+    }
+
+    /**
+     * Upload PDF buffer to Gemini Files API
+     * Returns file URI for use in subsequent requests
+     * File is cached by Gemini for efficient reuse
+     */
+    async uploadPdfBuffer(buffer: Buffer, filename: string): Promise<string> {
+        try {
+            // Write buffer to temp file (FileManager requires file path)
+            const fs = await import('fs');
+            const path = await import('path');
+            const os = await import('os');
+
+            const tempPath = path.join(os.tmpdir(), `context-rag-${Date.now()}-${filename}`);
+            fs.writeFileSync(tempPath, buffer);
+
+            this.logger.info('Uploading PDF to Gemini Files API', { filename });
+
+            const uploadResult = await this.fileManager.uploadFile(tempPath, {
+                mimeType: 'application/pdf',
+                displayName: filename,
+            });
+
+            // Cleanup temp file
+            fs.unlinkSync(tempPath);
+
+            this.logger.info('PDF uploaded successfully', {
+                fileUri: uploadResult.file.uri,
+                displayName: uploadResult.file.displayName,
+            });
+
+            return uploadResult.file.uri;
+        } catch (error) {
+            this.logger.error('Failed to upload PDF', { error: (error as Error).message });
+            throw error;
+        }
+    }
+
+    /**
+     * Generate content using uploaded PDF URI
+     * Uses Gemini's file caching for efficient context generation
+     */
+    async generateWithPdfUri(pdfUri: string, prompt: string): Promise<string> {
+        await this.rateLimiter.acquire();
+
+        try {
+            const result = await this.model.generateContent({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            { fileData: { mimeType: 'application/pdf', fileUri: pdfUri } },
+                            { text: prompt },
+                        ],
+                    },
+                ],
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 200,
+                },
+            });
+
+            this.rateLimiter.reportSuccess();
+            return result.response.text().trim();
+        } catch (error) {
+            this.handleError(error as Error);
+            throw error;
+        }
     }
 
     /**

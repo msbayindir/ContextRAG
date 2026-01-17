@@ -31,11 +31,22 @@ export class RetrievalEngine {
 
     /**
      * Search for relevant content
+     * Note: HEADING chunks are excluded by default. Use filters.chunkTypes to include them.
      */
     async search(options: SearchOptions): Promise<SearchResult[]> {
         const startTime = Date.now();
         const mode = options.mode ?? SearchModeEnum.HYBRID;
         const limit = options.limit ?? 10;
+
+        // Apply default filter to exclude HEADING chunks unless explicitly included
+        const filters: SearchFilters = {
+            ...options.filters,
+        };
+
+        // If chunkTypes not specified, exclude HEADING by default
+        if (!filters.chunkTypes) {
+            filters.chunkTypes = ['TEXT', 'TABLE', 'LIST', 'CODE', 'QUOTE', 'IMAGE_REF', 'QUESTION', 'MIXED'];
+        }
 
         this.logger.debug('Starting search', {
             query: options.query.substring(0, 50),
@@ -47,14 +58,14 @@ export class RetrievalEngine {
 
         switch (mode) {
             case SearchModeEnum.SEMANTIC:
-                results = await this.semanticSearch(options.query, limit, options.filters, options.minScore);
+                results = await this.semanticSearch(options.query, limit, filters, options.minScore);
                 break;
             case SearchModeEnum.KEYWORD:
-                results = await this.keywordSearch(options.query, limit, options.filters);
+                results = await this.keywordSearch(options.query, limit, filters);
                 break;
             case SearchModeEnum.HYBRID:
             default:
-                results = await this.hybridSearch(options.query, limit, options.filters, options.minScore);
+                results = await this.hybridSearch(options.query, limit, filters, options.minScore);
                 break;
         }
 

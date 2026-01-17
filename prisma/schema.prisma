@@ -77,8 +77,14 @@ model ContextRagChunk {
   /// Type of content: TEXT, TABLE, LIST, CODE, HEADING, IMAGE_REF, QUOTE, MIXED
   chunkType String @map("chunk_type")
 
-  /// Plain text content optimized for vector search
+  /// Plain text content optimized for vector search (original)
   searchContent String @map("search_content") @db.Text
+
+  /// Enriched content: context + searchContent (used for embedding when RAG enhancement enabled)
+  enrichedContent String? @map("enriched_content") @db.Text
+
+  /// AI-generated context text only (for debugging/display)
+  contextText String? @map("context_text") @db.Text
 
   /// Vector embedding (768 dimensions for Gemini)
   searchVector Unsupported("vector(768)") @map("search_vector")

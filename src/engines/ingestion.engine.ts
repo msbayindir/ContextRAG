@@ -1,3 +1,4 @@
+
 import type { PrismaClientLike } from '../types/config.types.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type {
@@ -27,6 +28,8 @@ import {
     parseFallbackContent,
     cleanForSearch
 } from '../utils/chunk-parser.js';
+import { createEnhancementHandler } from '../enhancements/enhancement-registry.js';
+import type { EnhancementHandler, DocumentContext, ChunkData } from '../types/rag-enhancement.types.js';
 
 /**
  * Ingestion engine for processing documents
@@ -44,6 +47,7 @@ export class IngestionEngine {
     private readonly chunkRepo: ChunkRepository;
     private readonly promptConfigRepo: PromptConfigRepository;
     private readonly logger: Logger;
+    private readonly enhancementHandler: EnhancementHandler;
 
     constructor(
         config: ResolvedConfig,
@@ -59,6 +63,11 @@ export class IngestionEngine {
         this.chunkRepo = new ChunkRepository(this.prisma);
         this.promptConfigRepo = new PromptConfigRepository(this.prisma);
         this.logger = logger;
+        this.enhancementHandler = createEnhancementHandler(
+            config.ragEnhancement,
+            config,
+            this.gemini
+        );
     }
 
     /**
@@ -339,10 +348,39 @@ export class IngestionEngine {
                 batch.pageEnd
             );
 
-            // Generate embeddings and save chunks
-            const embeddings = await this.gemini.embedBatch(
-                chunks.map(c => c.searchContent)
+            // RAG Enhancement: Generate context for each chunk (Anthropic-style)
+            const docContext: DocumentContext = {
+                documentType: undefined, // Inferred from processing
+                filename: 'document.pdf',
+                pageCount: batch.pageEnd, // Approximate from batch
+            };
+
+            // Generate context and create enriched content
+            for (const chunk of chunks) {
+                const chunkData: ChunkData = {
+                    content: chunk.displayContent,
+                    searchContent: chunk.searchContent,
+                    displayContent: chunk.displayContent,
+                    chunkType: chunk.chunkType,
+                    page: chunk.sourcePageStart,
+                    parentHeading: undefined, // Could be extracted from metadata
+                };
+
+                // Generate context using enhancement handler
+                const context = await this.enhancementHandler.generateContext(chunkData, docContext);
+
+                // Store context and create enriched content
+                if (context) {
+                    (chunk as any).contextText = context;
+                    (chunk as any).enrichedContent = `${context} ${chunk.searchContent}`;
+                }
+            }
+
+            // Generate embeddings using enrichedContent if available, otherwise searchContent
+            const textsToEmbed = chunks.map(c =>
+                (c as any).enrichedContent ?? c.searchContent
             );
+            const embeddings = await this.gemini.embedBatch(textsToEmbed);
 
             await this.chunkRepo.createMany(
                 chunks,

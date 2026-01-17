@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { RagEnhancementConfig } from './rag-enhancement.types.js';
 
 /**
  * Generic Prisma client type - allows any Prisma client instance
@@ -94,6 +95,8 @@ export interface ContextRAGConfig {
     rateLimitConfig?: Partial<RateLimitConfig>;
     /** Logging configuration */
     logging?: Partial<LogConfig>;
+    /** RAG Enhancement configuration (Contextual Retrieval, etc.) */
+    ragEnhancement?: RagEnhancementConfig;
 }
 
 /**
@@ -109,6 +112,7 @@ export interface ResolvedConfig {
     chunkConfig: ChunkConfig;
     rateLimitConfig: RateLimitConfig;
     logging: LogConfig;
+    ragEnhancement?: RagEnhancementConfig;
 }
 
 /**
