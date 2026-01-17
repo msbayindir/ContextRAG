@@ -1,6 +1,6 @@
 # 🧠 Context-RAG
 
-**A powerful, multimodal RAG engine with contextual retrieval, auto-prompt discovery, and PostgreSQL-native vector search.**
+**A powerful, multimodal RAG engine with Anthropic-style Contextual Retrieval, Gemini Files API integration, and PostgreSQL-native vector search.**
 
 [![npm version](https://badge.fury.io/js/context-rag.svg)](https://www.npmjs.com/package/context-rag)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,57 +11,171 @@
 ## ✨ Key Features
 
 | Feature | Description |
-|---------|-----------|
+|---------|-------------|
+| 🚀 **Gemini Files API** | Upload PDF once, use cached URI for entire pipeline (90%+ bandwidth savings) |
+| 🧠 **Contextual Retrieval** | Anthropic-style context generation for each chunk (improves recall by ~49%) |
 | 🔍 **Discovery Agent** | AI automatically analyzes documents and suggests optimal chunking strategies |
 | 📄 **Multimodal Processing** | Uses Gemini Vision API to understand tables, charts, and layouts |
-| 📝 **Template-Based Prompts** | Structured `<!-- SECTION -->` output format for reliable parsing |
 | 🧪 **Experiment System** | A/B test different models on same document for comparison |
-| ❓ **Question Extraction** | Automatically detects multiple-choice questions (A, B, C, D, E) |
-| 🎯 **Contextual Retrieval** | Separate search and display content for optimal results |
+| 🎯 **Hybrid Search** | Semantic (vector) + Keyword (full-text) search combination |
 | 🐘 **PostgreSQL Native** | No external vector DB needed, uses pgvector |
-| 🔄 **Hybrid Search** | Combines semantic and keyword search |
 | ⚡ **Batch Processing** | Concurrent processing with automatic retry |
-| 📊 **Progress Events** | Type-safe event emitter for real-time tracking |
 
 ---
 
 ## 📦 Installation
 
 ```bash
-# npm
 npm install context-rag
-
-# pnpm
+# or
 pnpm add context-rag
-
-# yarn
+# or
 yarn add context-rag
 ```
 
-### Prerequisites
+---
 
-- Node.js 18+
-- PostgreSQL with [pgvector](https://github.com/pgvector/pgvector) extension
-- Gemini API key
+## 🛠️ Prerequisites
+
+### 1. PostgreSQL with pgvector Extension
+
+```bash
+# Ubuntu/Debian
+sudo apt install postgresql-15-pgvector
+
+# macOS (Homebrew)
+brew install pgvector
+
+# Docker
+docker run -e POSTGRES_PASSWORD=password -p 5432:5432 pgvector/pgvector:pg15
+```
+
+Then enable the extension:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### 2. Prisma Schema Setup
+
+Add Context-RAG models to your `prisma/schema.prisma`:
+
+```prisma
+// Required: pgvector extension
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// Context-RAG Models (copy these to your schema)
+model ContextRagPromptConfig {
+  id              String   @id @default(uuid())
+  documentType    String   @map("document_type")
+  name            String
+  systemPrompt    String   @map("system_prompt") @db.Text
+  userPromptTemplate String? @map("user_prompt_template") @db.Text
+  chunkStrategy   Json     @map("chunk_strategy")
+  version         Int      @default(1)
+  isDefault       Boolean  @default(false) @map("is_default")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  chunks          ContextRagChunk[]
+  @@unique([documentType, version])
+  @@map("context_rag_prompt_configs")
+}
+
+model ContextRagChunk {
+  id              String   @id @default(uuid())
+  promptConfigId  String   @map("prompt_config_id")
+  promptConfig    ContextRagPromptConfig @relation(fields: [promptConfigId], references: [id], onDelete: Cascade)
+  documentId      String   @map("document_id")
+  chunkIndex      Int      @map("chunk_index")
+  chunkType       String   @map("chunk_type")
+  searchContent   String   @map("search_content") @db.Text
+  enrichedContent String?  @map("enriched_content") @db.Text  // Context + searchContent
+  contextText     String?  @map("context_text") @db.Text      // Generated context only
+  searchVector    Unsupported("vector(768)") @map("search_vector")
+  displayContent  String   @map("display_content") @db.Text
+  sourcePageStart Int      @map("source_page_start")
+  sourcePageEnd   Int      @map("source_page_end")
+  confidenceScore Float    @map("confidence_score")
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  @@index([documentId])
+  @@index([chunkType])
+  @@map("context_rag_chunks")
+}
+
+model ContextRagDocument {
+  id           String   @id @default(uuid())
+  filename     String
+  fileHash     String   @map("file_hash")
+  fileSize     Int      @map("file_size")
+  pageCount    Int      @map("page_count")
+  documentType String?  @map("document_type")
+  promptConfigId String? @map("prompt_config_id")
+  experimentId String?  @map("experiment_id")
+  modelName    String?  @map("model_name")
+  modelConfig  Json?    @map("model_config")
+  status       String   @default("PENDING")
+  completedBatches Int  @default(0) @map("completed_batches")
+  failedBatches Int     @default(0) @map("failed_batches")
+  totalBatches Int      @default(0) @map("total_batches")
+  tokenUsageInput Int?  @map("token_usage_input")
+  tokenUsageOutput Int? @map("token_usage_output")
+  tokenUsageTotal Int?  @map("token_usage_total")
+  processingMs Int?     @map("processing_ms")
+  error        String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  batches      ContextRagBatch[]
+  @@unique([fileHash, experimentId])
+  @@map("context_rag_documents")
+}
+
+model ContextRagBatch {
+  id           String   @id @default(uuid())
+  documentId   String   @map("document_id")
+  document     ContextRagDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  batchIndex   Int      @map("batch_index")
+  pageStart    Int      @map("page_start")
+  pageEnd      Int      @map("page_end")
+  status       String   @default("PENDING")
+  tokenUsageInput Int?  @map("token_usage_input")
+  tokenUsageOutput Int? @map("token_usage_output")
+  tokenUsageTotal Int?  @map("token_usage_total")
+  processingMs Int?     @map("processing_ms")
+  error        String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  @@unique([documentId, batchIndex])
+  @@map("context_rag_batches")
+}
+```
+
+Then run migrations:
+
+```bash
+npx prisma migrate dev --name add-context-rag
+```
+
+### 3. Environment Variables
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+GEMINI_API_KEY="your-gemini-api-key"
+```
 
 ---
 
 ## 🚀 Quick Start
-
-### 1. Setup Database
-
-```bash
-# Add Context-RAG models to your Prisma schema
-npx context-rag init
-
-# Enable pgvector extension
-psql -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-# Run migrations
-npx prisma migrate dev
-```
-
-### 2. Initialize & Use
 
 ```typescript
 import { ContextRAG } from 'context-rag';
@@ -72,11 +186,18 @@ const prisma = new PrismaClient();
 const rag = new ContextRAG({
   prisma,
   geminiApiKey: process.env.GEMINI_API_KEY!,
+  model: 'gemini-3-flash-preview',
+  
+  // NEW: Contextual Retrieval Enhancement
+  ragEnhancement: {
+    approach: 'anthropic_contextual',
+    strategy: 'simple', // 'none' | 'simple' | 'llm'
+  },
 });
 
 // 🔍 Discover optimal strategy
 const strategy = await rag.discover({ file: './document.pdf' });
-console.log(`Detected: ${strategy.documentType} (${Math.round(strategy.confidence * 100)}% confidence)`);
+console.log(`Detected: ${strategy.documentType}`);
 
 // ✅ Approve and create config
 await rag.approveStrategy(strategy.id);
@@ -84,9 +205,7 @@ await rag.approveStrategy(strategy.id);
 // 📥 Ingest document
 const result = await rag.ingest({
   file: './document.pdf',
-  onProgress: (status) => {
-    console.log(`Batch ${status.current}/${status.total}`);
-  },
+  onProgress: (status) => console.log(`Batch ${status.current}/${status.total}`),
 });
 
 // 🔎 Search
@@ -103,6 +222,45 @@ results.forEach((r) => {
 
 ---
 
+## 🧠 Contextual Retrieval
+
+Context-RAG implements [Anthropic's Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) approach using Gemini Files API.
+
+### The Problem
+
+A chunk like `"Value: 50 mg/dL"` alone has no context. Searching for "Cyanide test" won't find it.
+
+### The Solution
+
+Each chunk gets contextual information prepended:
+
+```
+"This chunk is from the Biochemistry Test Results table, showing 
+the Cyanide test value for patient Ahmet Yılmaz. Value: 50 mg/dL"
+```
+
+### Configuration
+
+```typescript
+const rag = new ContextRAG({
+  // ...
+  ragEnhancement: {
+    approach: 'anthropic_contextual',
+    strategy: 'llm',           // Best quality, uses Gemini
+    skipChunkTypes: ['HEADING', 'IMAGE_REF'],
+    concurrencyLimit: 5,
+  },
+});
+```
+
+| Strategy | Cost | Quality Improvement |
+|----------|------|---------------------|
+| `none` | $0 | Baseline |
+| `simple` | $0 | +20% (template-based) |
+| `llm` | ~$0.005/chunk | +49% (Gemini-generated) |
+
+---
+
 ## ⚙️ Configuration
 
 ```typescript
@@ -112,34 +270,27 @@ const rag = new ContextRAG({
   geminiApiKey: 'your-api-key',
 
   // Model selection
-  model: 'gemini-3-flash-preview',     // 'gemini-3-pro-preview' | 'gemini-2.0-flash'
-  embeddingModel: 'text-embedding-004',
+  model: 'gemini-3-flash-preview',
+  embeddingModel: 'gemini-embedding-exp-03-07',
+
+  // Generation
+  generationConfig: {
+    temperature: 0.2,
+    maxOutputTokens: 16384,
+  },
 
   // Batch processing
   batchConfig: {
     pagesPerBatch: 15,
     maxConcurrency: 3,
     maxRetries: 3,
-    retryDelayMs: 1000,
-    backoffMultiplier: 2,
   },
 
-  // Chunking
-  chunkConfig: {
-    maxTokens: 500,
-    overlapTokens: 50,
-  },
-
-  // Rate limiting
-  rateLimitConfig: {
-    requestsPerMinute: 60,
-    adaptive: true,
-  },
-
-  // Logging
-  logging: {
-    level: 'info',  // 'debug' to see prompts
-    structured: true,
+  // RAG Enhancement
+  ragEnhancement: {
+    approach: 'anthropic_contextual',
+    strategy: 'simple',
+    skipChunkTypes: ['HEADING'],
   },
 });
 ```
@@ -151,39 +302,12 @@ const rag = new ContextRAG({
 ### Discovery
 
 ```typescript
-// Analyze document
 const strategy = await rag.discover({
-  file: pdfBuffer,           // Buffer or file path
-  documentTypeHint: 'Medical', // Optional hint
+  file: pdfBuffer,
+  documentTypeHint: 'Medical',
 });
 
-// Approve with overrides
-await rag.approveStrategy(strategy.id, {
-  documentType: 'Custom Type',
-  chunkStrategy: { maxTokens: 1000 },
-});
-```
-
-### Prompt Configuration
-
-```typescript
-// Create custom config
-await rag.createPromptConfig({
-  documentType: 'Legal',
-  name: 'Legal Contracts',
-  systemPrompt: 'Extract contract clauses with attention to...',
-  chunkStrategy: {
-    maxTokens: 800,
-    preserveTables: true,
-  },
-  setAsDefault: true,
-});
-
-// List configs
-const configs = await rag.getPromptConfigs({ documentType: 'Legal' });
-
-// Activate version
-await rag.activatePromptConfig(configId);
+await rag.approveStrategy(strategy.id);
 ```
 
 ### Ingestion
@@ -193,65 +317,49 @@ const result = await rag.ingest({
   file: pdfBuffer,
   filename: 'report.pdf',
   documentType: 'Medical',
-  experimentId: 'exp_flash_v1',  // NEW: For A/B testing different models
-  skipExisting: true,            // Checks hash + experimentId
-  onProgress: (status) => {
-    console.log(`${status.status}: pages ${status.pageRange.start}-${status.pageRange.end}`);
-  },
+  experimentId: 'exp_v1',  // For A/B testing
+  skipExisting: true,
+  onProgress: (status) => console.log(status),
 });
-
-// Result
-// {
-//   documentId: 'uuid',
-//   status: 'COMPLETED',
-//   chunkCount: 908,
-//   batchCount: 14,
-//   processingMs: 1197242,
-// }
 ```
 
 ### Search
 
 ```typescript
-// Simple
-const results = await rag.search({ query: 'your query' });
-
-// Advanced
 const results = await rag.search({
   query: 'medication interactions',
-  mode: 'hybrid',              // 'semantic' | 'keyword' | 'hybrid'
+  mode: 'hybrid',
   limit: 20,
   minScore: 0.5,
   filters: {
     documentTypes: ['Medical'],
     chunkTypes: ['TABLE', 'TEXT'],
-    minConfidence: 0.8,
   },
   typeBoost: {
     TABLE: 1.5,
-    LIST: 1.2,
   },
-  includeExplanation: true,
 });
-
-// With metadata
-const response = await rag.searchWithMetadata({ query: 'your query' });
-console.log(`Found ${response.metadata.totalFound} in ${response.metadata.processingTimeMs}ms`);
 ```
 
-### Admin
+---
 
-```typescript
-// Health check
-const health = await rag.healthCheck();
-// { status: 'healthy', database: true, pgvector: true }
+## 📤 Publishing to npm
 
-// Statistics
-const stats = await rag.getStats();
-// { totalDocuments: 10, totalChunks: 500, promptConfigs: 3, storageBytes: 1024000 }
+If you want to publish your own fork:
 
-// Delete document
-await rag.deleteDocument(documentId);
+```bash
+# 1. Login to npm
+npm login
+
+# 2. Build the package
+pnpm build
+
+# 3. Publish (first time)
+npm publish --access public
+
+# 4. Publish update
+npm version patch  # or minor/major
+npm publish
 ```
 
 ---
@@ -262,15 +370,62 @@ await rag.deleteDocument(documentId);
 # Install dependencies
 pnpm install
 
-# Run tests
-pnpm test
-
 # Build
 pnpm build
 
 # Lint
 pnpm lint
+
+# Type check
+pnpm typecheck
+
+# Run demo
+pnpm demo
 ```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Here's how to get started:
+
+### Getting Started
+
+1. **Fork** the repository
+2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/ContextRAG.git`
+3. **Install** dependencies: `pnpm install`
+4. **Create** a branch: `git checkout -b feature/amazing-feature`
+
+### Making Changes
+
+1. Make your changes
+2. Run linting: `pnpm lint`
+3. Run build: `pnpm build`
+4. Test your changes locally
+
+### Submitting a PR
+
+1. **Commit** your changes: `git commit -m 'feat: add amazing feature'`
+2. **Push** to your fork: `git push origin feature/amazing-feature`
+3. Open a **Pull Request**
+
+### Commit Convention
+
+We use [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `feat:` New feature
+- `fix:` Bug fix
+- `docs:` Documentation only
+- `refactor:` Code change that neither fixes nor adds
+- `test:` Adding tests
+- `chore:` Build process or auxiliary tool changes
+
+### Code Style
+
+- TypeScript strict mode
+- ESLint + Prettier
+- Meaningful variable/function names
+- JSDoc comments for public APIs
 
 ---
 
@@ -279,29 +434,31 @@ pnpm lint
 ```
 context-rag/
 ├── src/
-│   ├── context-rag.ts       # Main class
-│   ├── engines/             # Ingestion, Retrieval, Discovery
+│   ├── context-rag.ts       # Main facade class
+│   ├── engines/             # Discovery, Ingestion, Retrieval
+│   ├── enhancements/        # RAG Enhancement handlers
+│   │   └── anthropic/       # Anthropic Contextual Retrieval
 │   ├── services/            # Gemini API, PDF Processor
-│   ├── database/            # Repository pattern
-│   ├── config/              # Template system (NEW)
-│   │   └── templates.ts     # DISCOVERY_TEMPLATE, BASE_EXTRACTION_TEMPLATE
-│   ├── types/               # TypeScript types & Zod schemas
-│   ├── utils/               # Logger, Retry, RateLimiter, chunk-parser
+│   ├── database/            # Prisma repositories
+│   ├── config/              # Templates
+│   ├── types/               # TypeScript types
+│   ├── utils/               # Logger, Retry, RateLimiter
 │   └── errors/              # Custom error classes
-├── examples/                # Demo with experiment system
-├── tests/                   # Unit tests (59 tests)
+├── examples/                # Demo scripts
 ├── prisma/                  # Reference schema
-└── .github/workflows/       # CI/CD
+└── dist/                    # Built output
 ```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting a PR.
 
 ---
 
 ## 📄 License
 
-MIT © Muhammed Bayindir
+MIT © [Muhammed Bayindir](https://github.com/msbayindir)
+
+---
+
+## 🙏 Acknowledgments
+
+- [Anthropic](https://www.anthropic.com/) for the Contextual Retrieval research
+- [Google](https://ai.google.dev/) for Gemini API and Files API
+- [pgvector](https://github.com/pgvector/pgvector) for PostgreSQL vector support

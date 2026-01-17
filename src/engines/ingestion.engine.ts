@@ -393,7 +393,14 @@ export class IngestionEngine {
                 // Store context and create enriched content
                 if (context) {
                     (chunk as any).contextText = context;
-                    (chunk as any).enrichedContent = `${context} ${chunk.searchContent}`;
+                    const enriched = `${context} ${chunk.searchContent}`;
+                    (chunk as any).enrichedContent = enriched;
+
+                    // [Context-RAG Update]
+                    // Update searchContent to include context for proper hybrid search indexing.
+                    // This aligns with Anthropic's Contextual Retrieval architecture where 
+                    // the BM25 (Keyword) index is built from the "Context + Chunk" content.
+                    chunk.searchContent = enriched;
                 }
             }
 

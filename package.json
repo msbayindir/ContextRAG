@@ -1,6 +1,6 @@
 {
   "name": "context-rag",
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
   "type": "module",
   "description": "A powerful, multimodal RAG engine with contextual retrieval, auto-prompt discovery, and PostgreSQL-native vector search",
   "main": "dist/index.js",
@@ -55,12 +55,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/muhammedbayindir/context-rag.git"
+    "url": "https://github.com/msbayindir/ContextRAG.git"
   },
   "bugs": {
-    "url": "https://github.com/muhammedbayindir/context-rag/issues"
+    "url": "https://github.com/msbayindir/ContextRAG/issues"
   },
-  "homepage": "https://github.com/muhammedbayindir/context-rag#readme",
+  "homepage": "https://github.com/msbayindir/ContextRAG#readme",
   "engines": {
     "node": ">=18.0.0"
   },
