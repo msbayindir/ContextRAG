@@ -329,7 +329,14 @@ export class GeminiService {
      * Generate content using uploaded PDF URI
      * Uses Gemini's file caching for efficient context generation
      */
-    async generateWithPdfUri(pdfUri: string, prompt: string): Promise<string> {
+    async generateWithPdfUri(
+        pdfUri: string,
+        prompt: string,
+        options?: {
+            temperature?: number;
+            maxOutputTokens?: number;
+        }
+    ): Promise<GeminiResponse> {
         await this.rateLimiter.acquire();
 
         try {
@@ -344,13 +351,25 @@ export class GeminiService {
                     },
                 ],
                 generationConfig: {
-                    temperature: 0.3,
-                    maxOutputTokens: 200,
+                    temperature: options?.temperature ?? 0.3,
+                    maxOutputTokens: options?.maxOutputTokens ?? 200,
                 },
             });
 
+            const response = result.response;
+            const text = response.text().trim();
+            const usage = response.usageMetadata;
+
             this.rateLimiter.reportSuccess();
-            return result.response.text().trim();
+
+            return {
+                text,
+                tokenUsage: {
+                    input: usage?.promptTokenCount ?? 0,
+                    output: usage?.candidatesTokenCount ?? 0,
+                    total: usage?.totalTokenCount ?? 0,
+                },
+            };
         } catch (error) {
             this.handleError(error as Error);
             throw error;

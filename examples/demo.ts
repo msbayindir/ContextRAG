@@ -125,6 +125,11 @@ async function main() {
             temperature: 0.2, // Lower temperature for accurate extraction
             maxOutputTokens: 8192 * 2,
         },
+        // NEW: Enable Contextual Retrieval Enhancement
+        ragEnhancement: {
+            approach: 'anthropic_contextual',
+            strategy: 'simple', // Using 'simple' (template) for demo speed. Use 'llm' for best quality.
+        },
         batchConfig: {
             pagesPerBatch: 15,
             maxConcurrency: 3,
@@ -368,27 +373,25 @@ E) ADP
     console.log('='.repeat(60));
 
     console.log(`
-   🆕 New Features:
+   🆕 New Features in this Version:
    
-   1. Discovery returns specialInstructions[] instead of full prompt
+   1. 🚀 Gemini Files API Integration
+      - Full PDF uploaded once & cached by Google
+      - Used for both Discovery and Ingestion (No more base64 payload limits)
+      - Massive context window support (2M+ tokens)
+   
+   2. 🧠 Contextual Retrieval (Anthropic-style)
+      - Each chunk gets a generated "Context" describing its location in the doc
+      - Solves "Lost in Middle" problem for isolated chunks (e.g., tables)
+      - Hybrid Search (Semantic + Keyword) + Type Boosting
+   
+   3. 🔍 Discovery returns specialInstructions[]
       - Document-specific extraction rules
       - Example formats for consistency
    
-   2. Ingestion uses buildExtractionPrompt()
-      - BASE_EXTRACTION_TEMPLATE + document instructions
-      - Consistent <!-- SECTION --> output format
-   
-   3. CRITICAL EXTRACTION RULES
-      - No summarization or interpretation
-      - Verbatim extraction for legal/medical accuracy
-   
-   4. New Chunk Types:
-      - QUESTION: Multiple choice (A, B, C, D, E)
-      - All existing types: TEXT, TABLE, LIST, etc.
-   
-   5. Reliable Parsing with parseSections()
-      - Structured markers for consistent parsing
-      - Fallback parser for legacy compatibility
+   4. ⚡ Parallel Batch Processing
+      - Reliable structured <!-- SECTION --> output
+      - Robust error handling and retry mechanisms
 `);
 
     // Cleanup

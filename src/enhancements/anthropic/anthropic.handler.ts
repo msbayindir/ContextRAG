@@ -100,7 +100,8 @@ Bu chunk'ın belgede nerede olduğunu ve ne hakkında olduğunu 1-2 cümle ile T
 <chunk>
 ${chunk.content}
 </chunk>`;
-                return await this.gemini.generateWithPdfUri(doc.fileUri, chunkPrompt);
+                const result = await this.gemini.generateWithPdfUri(doc.fileUri, chunkPrompt);
+                return result.text;
             }
 
             // Otherwise, generate without full document context

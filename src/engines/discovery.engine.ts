@@ -73,14 +73,14 @@ export class DiscoveryEngine {
         // Load PDF
         const { buffer, metadata } = await this.pdfProcessor.load(options.file);
 
-        // Create vision part for analysis
-        const pdfPart = this.pdfProcessor.createVisionPart(buffer);
+        // Upload PDF to Gemini Files API (cache for analysis)
+        const fileUri = await this.gemini.uploadPdfBuffer(buffer, metadata.filename);
 
         // Build discovery prompt from template
         const prompt = buildDiscoveryPrompt(options.documentTypeHint);
 
-        // Call Gemini with full document
-        const response = await this.gemini.generateWithVision(prompt, [pdfPart]);
+        // Call Gemini with full document via Files API
+        const response = await this.gemini.generateWithPdfUri(fileUri, prompt);
 
         // Parse response
         let analysisResult: DiscoveryAIResponse;

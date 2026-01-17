@@ -83,6 +83,9 @@ export class IngestionEngine {
         // Load PDF
         const { buffer, metadata } = await this.pdfProcessor.load(options.file);
 
+        // Upload PDF to Gemini Files API (cache for batch processing and context generation)
+        const fileUri = await this.gemini.uploadPdfBuffer(buffer, metadata.filename);
+
         // Check for existing document (by hash + experimentId)
         if (options.skipExisting) {
             const existing = await this.documentRepo.getByHashAndExperiment(
@@ -179,10 +182,12 @@ export class IngestionEngine {
         // Process batches with concurrency control
         const batchResults = await this.processBatchesConcurrently(
             documentId,
-            buffer,
+            // buffer removed
             documentInstructions,
             exampleFormats,
             promptConfigId ?? 'default',
+            fileUri,
+            metadata.filename,
             options.onProgress
         );
 
@@ -239,10 +244,12 @@ export class IngestionEngine {
      */
     private async processBatchesConcurrently(
         documentId: string,
-        pdfBuffer: Buffer,
+        // pdfBuffer removed - using Files API fileUri instead
         documentInstructions: string[],
         exampleFormats: Record<string, string> | undefined,
         promptConfigId: string,
+        fileUri: string, // [NEW] Files API URI
+        filename: string,
         onProgress?: (status: BatchStatus) => void
     ): Promise<BatchResult[]> {
         const batches = await this.batchRepo.getByDocumentId(documentId);
@@ -256,10 +263,12 @@ export class IngestionEngine {
             const batchPromises = currentBatch.map(batch =>
                 this.processSingleBatch(
                     batch,
-                    pdfBuffer,
+                    // pdfBuffer removed
                     documentInstructions,
                     exampleFormats,
                     promptConfigId,
+                    fileUri,
+                    filename,
                     documentId,
                     batches.length,
                     onProgress
@@ -278,10 +287,12 @@ export class IngestionEngine {
      */
     private async processSingleBatch(
         batch: { id: string; batchIndex: number; pageStart: number; pageEnd: number },
-        pdfBuffer: Buffer,
+        // pdfBuffer removed
         documentInstructions: string[],
         exampleFormats: Record<string, string> | undefined,
         promptConfigId: string,
+        fileUri: string,
+        filename: string,
         documentId: string,
         totalBatches: number,
         onProgress?: (status: BatchStatus) => void
@@ -304,9 +315,6 @@ export class IngestionEngine {
         try {
             const result = await withRetry(
                 async () => {
-                    // Create vision part from PDF
-                    const pdfPart = this.pdfProcessor.createVisionPart(pdfBuffer);
-
                     // Build structured extraction prompt using template
                     const prompt = buildExtractionPrompt(
                         documentInstructions,
@@ -315,7 +323,19 @@ export class IngestionEngine {
                         batch.pageEnd
                     );
 
-                    const response = await this.gemini.generateWithVision(prompt, [pdfPart]);
+                    // Use Files API with cached PDF URI (optimized)
+                    const fullPrompt = `${prompt}
+                    
+                    IMPORTANT: You have the FULL document. Restrict your extraction STRICTLY to pages ${batch.pageStart} to ${batch.pageEnd}. Do not extract content from other pages.`;
+
+                    const response = await this.gemini.generateWithPdfUri(
+                        fileUri,
+                        fullPrompt,
+                        {
+                            temperature: this.config.generationConfig?.temperature,
+                            maxOutputTokens: this.config.generationConfig?.maxOutputTokens,
+                        }
+                    );
 
                     return response;
                 },
@@ -351,8 +371,9 @@ export class IngestionEngine {
             // RAG Enhancement: Generate context for each chunk (Anthropic-style)
             const docContext: DocumentContext = {
                 documentType: undefined, // Inferred from processing
-                filename: 'document.pdf',
+                filename: filename,
                 pageCount: batch.pageEnd, // Approximate from batch
+                fileUri: fileUri, // Pass the Files API URI for context generation
             };
 
             // Generate context and create enriched content
