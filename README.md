@@ -11,10 +11,12 @@
 ## ✨ Key Features
 
 | Feature | Description |
-|---------|-------------|
+|---------|-----------|
 | 🔍 **Discovery Agent** | AI automatically analyzes documents and suggests optimal chunking strategies |
 | 📄 **Multimodal Processing** | Uses Gemini Vision API to understand tables, charts, and layouts |
-| 📝 **Markdown Output** | Tables and lists converted to rich Markdown format |
+| 📝 **Template-Based Prompts** | Structured `<!-- SECTION -->` output format for reliable parsing |
+| 🧪 **Experiment System** | A/B test different models on same document for comparison |
+| ❓ **Question Extraction** | Automatically detects multiple-choice questions (A, B, C, D, E) |
 | 🎯 **Contextual Retrieval** | Separate search and display content for optimal results |
 | 🐘 **PostgreSQL Native** | No external vector DB needed, uses pgvector |
 | 🔄 **Hybrid Search** | Combines semantic and keyword search |
@@ -110,7 +112,7 @@ const rag = new ContextRAG({
   geminiApiKey: 'your-api-key',
 
   // Model selection
-  model: 'gemini-1.5-pro',           // 'gemini-1.5-flash' | 'gemini-2.0-flash-exp'
+  model: 'gemini-3-flash-preview',     // 'gemini-3-pro-preview' | 'gemini-2.0-flash'
   embeddingModel: 'text-embedding-004',
 
   // Batch processing
@@ -136,7 +138,7 @@ const rag = new ContextRAG({
 
   // Logging
   logging: {
-    level: 'info',
+    level: 'info',  // 'debug' to see prompts
     structured: true,
   },
 });
@@ -191,7 +193,8 @@ const result = await rag.ingest({
   file: pdfBuffer,
   filename: 'report.pdf',
   documentType: 'Medical',
-  skipExisting: true,
+  experimentId: 'exp_flash_v1',  // NEW: For A/B testing different models
+  skipExisting: true,            // Checks hash + experimentId
   onProgress: (status) => {
     console.log(`${status.status}: pages ${status.pageRange.start}-${status.pageRange.end}`);
   },
@@ -201,9 +204,9 @@ const result = await rag.ingest({
 // {
 //   documentId: 'uuid',
 //   status: 'COMPLETED',
-//   chunkCount: 42,
-//   batchCount: 5,
-//   processingMs: 12500,
+//   chunkCount: 908,
+//   batchCount: 14,
+//   processingMs: 1197242,
 // }
 ```
 
@@ -280,9 +283,12 @@ context-rag/
 │   ├── engines/             # Ingestion, Retrieval, Discovery
 │   ├── services/            # Gemini API, PDF Processor
 │   ├── database/            # Repository pattern
+│   ├── config/              # Template system (NEW)
+│   │   └── templates.ts     # DISCOVERY_TEMPLATE, BASE_EXTRACTION_TEMPLATE
 │   ├── types/               # TypeScript types & Zod schemas
-│   ├── utils/               # Logger, Retry, RateLimiter
+│   ├── utils/               # Logger, Retry, RateLimiter, chunk-parser
 │   └── errors/              # Custom error classes
+├── examples/                # Demo with experiment system
 ├── tests/                   # Unit tests (59 tests)
 ├── prisma/                  # Reference schema
 └── .github/workflows/       # CI/CD

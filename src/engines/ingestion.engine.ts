@@ -74,12 +74,16 @@ export class IngestionEngine {
         // Load PDF
         const { buffer, metadata } = await this.pdfProcessor.load(options.file);
 
-        // Check for existing document
+        // Check for existing document (by hash + experimentId)
         if (options.skipExisting) {
-            const existing = await this.documentRepo.getByHash(metadata.fileHash);
+            const existing = await this.documentRepo.getByHashAndExperiment(
+                metadata.fileHash,
+                options.experimentId
+            );
             if (existing) {
-                this.logger.info('Document already exists, skipping', {
+                this.logger.info('Document already exists for this experiment, skipping', {
                     documentId: existing.id,
+                    experimentId: options.experimentId,
                 });
                 return {
                     documentId: existing.id,
@@ -90,7 +94,7 @@ export class IngestionEngine {
                     tokenUsage: existing.tokenUsage ?? { input: 0, output: 0, total: 0 },
                     processingMs: 0,
                     batches: [],
-                    warnings: ['Document already exists, skipped processing'],
+                    warnings: ['Document already exists for this experiment, skipped processing'],
                 };
             }
         }
@@ -131,7 +135,7 @@ export class IngestionEngine {
             this.config.batchConfig.pagesPerBatch
         );
 
-        // Create document record
+        // Create document record with experiment info
         const documentId = await this.documentRepo.create({
             filename: options.filename ?? metadata.filename,
             fileHash: metadata.fileHash,
@@ -140,6 +144,12 @@ export class IngestionEngine {
             documentType: options.documentType,
             promptConfigId,
             totalBatches: batchSpecs.length,
+            experimentId: options.experimentId,
+            modelName: this.config.model,
+            modelConfig: {
+                temperature: this.config.generationConfig?.temperature,
+                maxOutputTokens: this.config.generationConfig?.maxOutputTokens,
+            },
         });
 
         // Create batch records

@@ -116,7 +116,7 @@ model ContextRagDocument {
   filename String
 
   /// SHA-256 hash for deduplication
-  fileHash String @unique @map("file_hash")
+  fileHash String @map("file_hash")
 
   /// File size in bytes
   fileSize Int @map("file_size")
@@ -126,6 +126,18 @@ model ContextRagDocument {
 
   /// Document type (matches PromptConfig.documentType)
   documentType String? @map("document_type")
+
+  /// Experiment identifier for A/B testing models
+  /// e.g., "exp_flash_v1", "exp_pro_v2"
+  experimentId String? @map("experiment_id")
+
+  /// AI model used for processing
+  /// e.g., "gemini-3-flash-preview", "gemini-3-pro-preview"
+  modelName String? @map("model_name")
+
+  /// Model configuration as JSON
+  /// { temperature, maxOutputTokens, ... }
+  modelConfig Json? @map("model_config")
 
   /// Processing status: PENDING, DISCOVERING, AWAITING_APPROVAL, PROCESSING, COMPLETED, FAILED, PARTIAL
   status String @default("PENDING")
@@ -153,9 +165,13 @@ model ContextRagDocument {
   /// Related batch jobs
   batches ContextRagBatch[]
 
+  /// Unique constraint: same file + same experiment = one record
+  /// Allows same PDF to be processed with different experiments
+  @@unique([fileHash, experimentId])
   @@index([status])
   @@index([fileHash])
   @@index([documentType])
+  @@index([experimentId])
   @@map("context_rag_documents")
 }
 

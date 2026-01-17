@@ -41,9 +41,14 @@ export interface IngestOptions {
     customPrompt?: string;
     /** Custom filename (if file is buffer) */
     filename?: string;
+    /** Experiment identifier for A/B testing different models
+     * e.g., "exp_flash_v1", "exp_pro_v2"
+     * Allows same PDF to be processed multiple times with different configs
+     */
+    experimentId?: string;
     /** Progress callback */
     onProgress?: ProgressCallback;
-    /** Skip if document already exists (based on hash) */
+    /** Skip if document already exists (based on hash + experimentId) */
     skipExisting?: boolean;
 }
 

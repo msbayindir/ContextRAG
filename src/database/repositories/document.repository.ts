@@ -12,6 +12,12 @@ interface CreateDocumentInput {
     documentType?: string;
     promptConfigId?: string;
     totalBatches: number;
+    /** Experiment identifier for A/B testing */
+    experimentId?: string;
+    /** Model name used for processing */
+    modelName?: string;
+    /** Model configuration (temperature, maxTokens, etc.) */
+    modelConfig?: Record<string, unknown>;
 }
 
 interface UpdateDocumentInput {
@@ -45,15 +51,19 @@ export class DocumentRepository {
                     promptConfigId: input.promptConfigId,
                     status: DocumentStatusEnum.PENDING,
                     totalBatches: input.totalBatches,
+                    experimentId: input.experimentId,
+                    modelName: input.modelName,
+                    modelConfig: input.modelConfig,
                 },
             });
 
             return doc.id;
         } catch (error) {
-            // Handle unique constraint violation (duplicate file)
+            // Handle unique constraint violation (duplicate file + experiment)
             if ((error as { code?: string }).code === 'P2002') {
-                throw new DatabaseError('Document with this hash already exists', {
+                throw new DatabaseError('Document with this hash and experimentId already exists', {
                     fileHash: input.fileHash,
+                    experimentId: input.experimentId,
                 });
             }
             throw new DatabaseError('Failed to create document', {
@@ -78,11 +88,25 @@ export class DocumentRepository {
     }
 
     /**
-     * Get document by file hash
+     * Get document by file hash (legacy - returns first match)
      */
     async getByHash(fileHash: string): Promise<DocumentStatus | null> {
-        const doc = await this.prisma.contextRagDocument.findUnique({
+        const doc = await this.prisma.contextRagDocument.findFirst({
             where: { fileHash },
+        });
+
+        return doc ? this.mapToDocumentStatus(doc) : null;
+    }
+
+    /**
+     * Get document by file hash and experiment ID
+     */
+    async getByHashAndExperiment(fileHash: string, experimentId?: string): Promise<DocumentStatus | null> {
+        const doc = await this.prisma.contextRagDocument.findFirst({
+            where: {
+                fileHash,
+                experimentId: experimentId ?? null,
+            },
         });
 
         return doc ? this.mapToDocumentStatus(doc) : null;

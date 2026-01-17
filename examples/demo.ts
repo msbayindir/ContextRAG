@@ -1,8 +1,15 @@
 /**
  * Context-RAG End-to-End Demo
  * 
+ * This demo showcases the new template-based prompt system:
+ * - Discovery returns specialInstructions and exampleFormats
+ * - Ingestion uses buildExtractionPrompt() for consistent output
+ * - AI outputs structured <!-- SECTION --> markers
+ * - Chunk parsing with parseSections() for reliable extraction
+ * 
  * Prerequisites:
  * 1. PostgreSQL with pgvector extension
+ * 
  * 2. GEMINI_API_KEY environment variable
  * 3. DATABASE_URL environment variable
  * 
@@ -14,6 +21,61 @@ import { ContextRAG } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+
+// Sample biochemistry text for testing (TUS exam questions)
+const SAMPLE_BIOCHEMISTRY_TEXT = `
+BİYOKİMYA'DA ÇIKMIŞ TUS SORU SPOTLARI -1
+
+METABOLİZMANIN TEMEL KAVRAMLARI
+
+1. METABOLİZMAYA GİRİŞ
+
+Biyokimyasal öneme sahip molekülerden açığa çıkan ΔG0:
+
+| Bileşik | ΔG0 kcal/mol |
+|---------|--------------|
+| Fosfoenol pirüvat | -14.8 |
+| Karbamoil fosfat | -12.3 |
+| 1,3-Bifosfogliserat → 3-Fosfogliserat | -11.8 |
+| Kreatin fosfat | -10.3 |
+| ATP → ADP + Pi | -7.3 |
+| ADP → AMP + Pi | -6.6 |
+| Glukoz-6-fosfat | -3.3 |
+
+**Soru 1:** Diğerlerine göre en yüksek negatif değere sahip olan yüksek enerjili bileşik hangisidir?
+A) ATP
+B) Kreatin fosfat
+C) Fosfoenol pirüvat
+D) Glukoz-6-fosfat
+E) ADP
+**Cevap:** C) Fosfoenol pirüvat
+
+**Soru 2:** ADP'den ATP sentezlemeye yetmeyen bileşik hangisidir?
+A) Fosfoenol pirüvat
+B) Kreatin fosfat
+C) 1,3-Bifosfogliserat
+D) Gliserol-3-fosfat
+E) Karbamoil fosfat
+**Cevap:** D) Gliserol-3-fosfat
+
+2. ELEKTRON TRANSPORT ZİNCİRİ
+
+Elektron Transport Zinciri Kompleksleri:
+
+| Kompleks | Enzim | Prostetik Grup |
+|----------|-------|----------------|
+| I | NADH dehidrojenaz | FMN, Fe-S |
+| II | Süksinat dehidrojenaz | FAD, Fe-S |
+| III | Ubikinon-sitokrom C oksidoredüktaz | Hem, Fe-S |
+| IV | Sitokrom oksidaz | Hem, bakır |
+| V | ATP sentez | - |
+
+ETZ İnhibitörleri:
+- Rotenon, Amobarbital → Kompleks I inhibisyonu
+- TTFA, Karboksin, Malonat → Kompleks II inhibisyonu
+- Antimisin A → Kompleks III inhibisyonu
+- Siyanür, Karbonmonoksit → Kompleks IV inhibisyonu
+`;
 
 // Check environment variables
 if (!process.env.GEMINI_API_KEY) {
@@ -27,8 +89,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 async function main() {
-    console.log('🧠 Context-RAG Demo\n');
-    console.log('='.repeat(50));
+    console.log('🧠 Context-RAG Demo - Template-Based Prompt System\n');
+    console.log('='.repeat(60));
 
     // Initialize Prisma
     console.log('\n📦 Initializing Prisma...');
@@ -58,17 +120,17 @@ async function main() {
     const rag = new ContextRAG({
         prisma,
         geminiApiKey: process.env.GEMINI_API_KEY!,
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 4096,
+            temperature: 0.2, // Lower temperature for accurate extraction
+            maxOutputTokens: 8192 * 2,
         },
         batchConfig: {
-            pagesPerBatch: 10,
-            maxConcurrency: 2,
+            pagesPerBatch: 15,
+            maxConcurrency: 3,
         },
         logging: {
-            level: 'info',
+            level: 'debug',
             structured: false,
         },
     });
@@ -89,162 +151,245 @@ async function main() {
     // Check for test PDF
     const testPdfPath = path.join(process.cwd(), 'examples', 'test.pdf');
     let pdfBuffer: Buffer;
+    let hasPdf = false;
 
     try {
         pdfBuffer = await fs.readFile(testPdfPath);
         console.log(`\n📄 Found test PDF: ${testPdfPath}`);
+        hasPdf = true;
     } catch {
         console.log('\n⚠️  No test.pdf found in examples folder');
-        console.log('   Creating a simple test with discovery...\n');
-
-        // Just show stats and exit
-        const stats = await rag.getStats();
-        console.log('📊 Current Stats:');
-        console.log(`   Documents: ${stats.totalDocuments}`);
-        console.log(`   Chunks: ${stats.totalChunks}`);
-        console.log(`   Prompt Configs: ${stats.promptConfigs}`);
-        console.log(`   Storage: ${(stats.storageBytes / 1024).toFixed(2)} KB`);
-
-        console.log('\n💡 To run full demo, add a PDF file at: examples/test.pdf');
-        await prisma.$disconnect();
-        return;
+        console.log('   Showing template system demo with sample text...\n');
     }
 
     // ========================================
-    // DISCOVERY DEMO
+    // TEMPLATE SYSTEM DEMO
     // ========================================
-    console.log('\n' + '='.repeat(50));
-    console.log('🔍 DISCOVERY DEMO');
-    console.log('='.repeat(50));
+    console.log('\n' + '='.repeat(60));
+    console.log('� TEMPLATE SYSTEM DEMO');
+    console.log('='.repeat(60));
 
-    let discovery;
-    let promptConfig;
+    console.log('\n🔍 Sample Biochemistry Text (TUS Exam):');
+    console.log('-'.repeat(40));
+    console.log(SAMPLE_BIOCHEMISTRY_TEXT.slice(0, 500) + '...\n');
 
-    try {
-        console.log('\n   Analyzing document...');
-        discovery = await rag.discover({ file: pdfBuffer });
+    console.log('\n📋 Expected AI Output Format:');
+    console.log('-'.repeat(40));
+    console.log(`
+<!-- SECTION type="HEADING" page="1" confidence="0.95" -->
+## 1. METABOLİZMAYA GİRİŞ
+<!-- /SECTION -->
 
-        console.log(`\n   📋 Discovery Results:`);
-        console.log(`      ID: ${discovery.id}`);
-        console.log(`      Document Type: ${discovery.documentType}`);
-        console.log(`      Confidence: ${(discovery.confidence * 100).toFixed(1)}%`);
-        console.log(`      Page Count: ${discovery.pageCount}`);
-        console.log(`      Elements Detected: ${discovery.detectedElements.length}`);
+<!-- SECTION type="TABLE" page="1" confidence="0.92" -->
+| Bileşik | ΔG0 kcal/mol |
+|---------|--------------|
+| Fosfoenol pirüvat | -14.8 |
+| Kreatin fosfat | -10.3 |
+| ATP → ADP + Pi | -7.3 |
+<!-- /SECTION -->
 
-        if (discovery.detectedElements.length > 0) {
-            console.log(`      Elements:`);
-            discovery.detectedElements.forEach(el => {
-                console.log(`        - ${el.type}: ${el.count}`);
-            });
-        }
-
-        console.log(`\n   💡 Suggested Strategy:`);
-        console.log(`      Max Tokens: ${discovery.suggestedChunkStrategy.maxTokens}`);
-        console.log(`      Split By: ${discovery.suggestedChunkStrategy.splitBy}`);
-        console.log(`      Preserve Tables: ${discovery.suggestedChunkStrategy.preserveTables}`);
-
-        // Approve strategy
-        console.log('\n   ✅ Approving strategy...');
-        promptConfig = await rag.approveStrategy(discovery.id);
-        console.log(`      Created Prompt Config: ${promptConfig.id}`);
-
-    } catch (error) {
-        console.error('   ❌ Discovery failed:', (error as Error).message);
-        return; // Exit if discovery fails
-    }
+<!-- SECTION type="QUESTION" page="1" confidence="0.94" -->
+**Soru 1:** Diğerlerine göre en yüksek negatif değere sahip olan...?
+A) ATP
+B) Kreatin fosfat
+C) Fosfoenol pirüvat
+D) Glukoz-6-fosfat
+E) ADP
+**Cevap:** C) Fosfoenol pirüvat
+<!-- /SECTION -->
+`);
 
     // ========================================
-    // INGESTION DEMO
+    // DISCOVERY DEMO (if PDF exists)
     // ========================================
-    console.log('\n' + '='.repeat(50));
-    console.log('📥 INGESTION DEMO');
-    console.log('='.repeat(50));
+    if (hasPdf) {
+        console.log('\n' + '='.repeat(60));
+        console.log('🔍 DISCOVERY DEMO');
+        console.log('='.repeat(60));
 
-    try {
-        console.log('\n   Processing document...\n');
+        let discovery;
+        let promptConfig;
 
-        const result = await rag.ingest({
-            file: pdfBuffer,
-            filename: 'test.pdf',
-            documentType: discovery.documentType,
-            promptConfigId: promptConfig.id,
-            skipExisting: false,
-            onProgress: (status) => {
-                const progress = `${status.current}/${status.total}`;
-                const pages = status.pageRange
-                    ? `pages ${status.pageRange.start}-${status.pageRange.end}`
-                    : '';
-                console.log(`   📦 Batch ${progress} ${status.status} ${pages}`);
-            },
-        });
-
-        console.log(`\n   ✅ Ingestion Complete!`);
-        console.log(`      Document ID: ${result.documentId}`);
-        console.log(`      Status: ${result.status}`);
-        console.log(`      Chunks Created: ${result.chunkCount}`);
-        console.log(`      Batches: ${result.batchCount}`);
-        console.log(`      Failed Batches: ${result.failedBatchCount}`);
-        console.log(`      Processing Time: ${result.processingMs}ms`);
-        console.log(`      Token Usage:`);
-        console.log(`        Input: ${result.tokenUsage.input}`);
-        console.log(`        Output: ${result.tokenUsage.output}`);
-        console.log(`        Total: ${result.tokenUsage.total}`);
-
-        if (result.warnings && result.warnings.length > 0) {
-            console.log(`\n   ⚠️  Warnings:`);
-            result.warnings.forEach(w => console.log(`      - ${w}`));
-        }
-
-        // ========================================
-        // SEARCH DEMO
-        // ========================================
-        console.log('\n' + '='.repeat(50));
-        console.log('🔎 SEARCH DEMO');
-        console.log('='.repeat(50));
-
-        const queries = [
-            'What is the main topic of this document?',
-            'List the key points mentioned',
-            'Are there any tables or data?',
-        ];
-
-        for (const query of queries) {
-            console.log(`\n   Query: "${query}"`);
-
-            const searchResults = await rag.search({
-                query,
-                limit: 3,
-                mode: 'hybrid',
-                includeExplanation: true,
+        try {
+            console.log('\n   Analyzing document...');
+            discovery = await rag.discover({
+                file: pdfBuffer!,
+                documentTypeHint: 'Medical' // Hint for biochemistry content
             });
 
-            if (searchResults.length === 0) {
-                console.log('   No results found');
+            console.log(`\n   📋 Discovery Results:`);
+            console.log(`      ID: ${discovery.id}`);
+            console.log(`      Document Type: ${discovery.documentType}`);
+            console.log(`      Confidence: ${(discovery.confidence * 100).toFixed(1)}%`);
+            console.log(`      Page Count: ${discovery.pageCount}`);
+
+            // NEW: Show specialInstructions
+            console.log(`\n   📝 Special Instructions (NEW!):`);
+            if (discovery.specialInstructions && discovery.specialInstructions.length > 0) {
+                discovery.specialInstructions.forEach((instruction, i) => {
+                    console.log(`      ${i + 1}. ${instruction}`);
+                });
             } else {
-                searchResults.forEach((r, i) => {
-                    console.log(`\n   [${i + 1}] Score: ${r.score.toFixed(3)}`);
-                    console.log(`       Type: ${r.chunk.chunkType}`);
-                    console.log(`       Content: ${r.chunk.displayContent.slice(0, 100)}...`);
+                console.log(`      (None detected, using defaults)`);
+            }
+
+            // NEW: Show exampleFormats
+            if (discovery.exampleFormats && Object.keys(discovery.exampleFormats).length > 0) {
+                console.log(`\n   📐 Example Formats (NEW!):`);
+                for (const [key, value] of Object.entries(discovery.exampleFormats)) {
+                    console.log(`      ${key}: ${value}`);
+                }
+            }
+
+            console.log(`\n   🎯 Chunk Strategy:`);
+            console.log(`      Max Tokens: ${discovery.suggestedChunkStrategy.maxTokens}`);
+            console.log(`      Split By: ${discovery.suggestedChunkStrategy.splitBy}`);
+            console.log(`      Preserve Tables: ${discovery.suggestedChunkStrategy.preserveTables}`);
+            console.log(`      Preserve Lists: ${discovery.suggestedChunkStrategy.preserveLists}`);
+
+            if (discovery.detectedElements.length > 0) {
+                console.log(`\n   🔎 Detected Elements:`);
+                discovery.detectedElements.forEach(el => {
+                    console.log(`      - ${el.type}: ${el.count}`);
                 });
             }
-        }
 
-    } catch (error) {
-        console.error('   ❌ Ingestion failed:', (error as Error).message);
+            // Approve strategy
+            console.log('\n   ✅ Approving strategy...');
+            promptConfig = await rag.approveStrategy(discovery.id);
+            console.log(`      Created Prompt Config: ${promptConfig.id}`);
+            console.log(`      Document Type: ${promptConfig.documentType}`);
+
+            // ========================================
+            // INGESTION DEMO
+            // ========================================
+            console.log('\n' + '='.repeat(60));
+            console.log('📥 INGESTION DEMO');
+            console.log('='.repeat(60));
+
+            console.log('\n   Processing document with template-based extraction...\n');
+
+            // Generate experiment ID from model name
+            const experimentId = `exp_${rag.getConfig().model.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}`;
+            console.log(`   🧪 Experiment ID: ${experimentId}\n`);
+
+            const result = await rag.ingest({
+                file: pdfBuffer!,
+                filename: 'test.pdf',
+                documentType: discovery.documentType,
+                promptConfigId: promptConfig.id,
+                experimentId,  // NEW: Allows same PDF with different models
+                skipExisting: true,  // Now checks hash + experimentId
+                onProgress: (status) => {
+                    const progress = `${status.current}/${status.total}`;
+                    const pages = status.pageRange
+                        ? `pages ${status.pageRange.start}-${status.pageRange.end}`
+                        : '';
+                    console.log(`   📦 Batch ${progress} ${status.status} ${pages}`);
+                },
+            });
+
+            console.log(`\n   ✅ Ingestion Complete!`);
+            console.log(`      Document ID: ${result.documentId}`);
+            console.log(`      Status: ${result.status}`);
+            console.log(`      Chunks Created: ${result.chunkCount}`);
+            console.log(`      Batches: ${result.batchCount}`);
+            console.log(`      Failed Batches: ${result.failedBatchCount}`);
+            console.log(`      Processing Time: ${result.processingMs}ms`);
+            console.log(`      Token Usage:`);
+            console.log(`        Input: ${result.tokenUsage.input}`);
+            console.log(`        Output: ${result.tokenUsage.output}`);
+            console.log(`        Total: ${result.tokenUsage.total}`);
+
+            // ========================================
+            // SEARCH DEMO
+            // ========================================
+            console.log('\n' + '='.repeat(60));
+            console.log('🔎 SEARCH DEMO');
+            console.log('='.repeat(60));
+
+            const queries = [
+                'Elektron transport zinciri kompleksleri nelerdir?',
+                'Siyanür hangi kompleksi inhibe eder?',
+                'En yüksek enerjili bileşik hangisidir?',
+                'Krebs döngüsü ile ilgili sorular',
+            ];
+
+            for (const query of queries) {
+                console.log(`\n   Query: "${query}"`);
+
+                const searchResults = await rag.search({
+                    query,
+                    limit: 3,
+                    mode: 'hybrid',
+                    includeExplanation: true,
+                });
+
+                if (searchResults.length === 0) {
+                    console.log('   No results found');
+                } else {
+                    searchResults.forEach((r, i) => {
+                        console.log(`\n   [${i + 1}] Score: ${r.score.toFixed(3)}`);
+                        console.log(`       Type: ${r.chunk.chunkType}`);
+                        console.log(`       Content: ${r.chunk.displayContent.slice(0, 150)}...`);
+
+                        // Show if parsed with structured markers
+                        const metadata = r.chunk.metadata as { parsedWithStructuredMarkers?: boolean };
+                        if (metadata?.parsedWithStructuredMarkers) {
+                            console.log(`       ✅ Parsed with structured SECTION markers`);
+                        }
+                    });
+                }
+            }
+
+        } catch (error) {
+            console.error('   ❌ Error:', (error as Error).message);
+        }
     }
 
     // ========================================
     // FINAL STATS
     // ========================================
-    console.log('\n' + '='.repeat(50));
+    console.log('\n' + '='.repeat(60));
     console.log('📊 FINAL STATS');
-    console.log('='.repeat(50));
+    console.log('='.repeat(60));
 
     const stats = await rag.getStats();
     console.log(`\n   Documents: ${stats.totalDocuments}`);
     console.log(`   Chunks: ${stats.totalChunks}`);
     console.log(`   Prompt Configs: ${stats.promptConfigs}`);
     console.log(`   Storage: ${(stats.storageBytes / 1024).toFixed(2)} KB`);
+
+    // ========================================
+    // TEMPLATE SYSTEM SUMMARY
+    // ========================================
+    console.log('\n' + '='.repeat(60));
+    console.log('📚 TEMPLATE SYSTEM SUMMARY');
+    console.log('='.repeat(60));
+
+    console.log(`
+   🆕 New Features:
+   
+   1. Discovery returns specialInstructions[] instead of full prompt
+      - Document-specific extraction rules
+      - Example formats for consistency
+   
+   2. Ingestion uses buildExtractionPrompt()
+      - BASE_EXTRACTION_TEMPLATE + document instructions
+      - Consistent <!-- SECTION --> output format
+   
+   3. CRITICAL EXTRACTION RULES
+      - No summarization or interpretation
+      - Verbatim extraction for legal/medical accuracy
+   
+   4. New Chunk Types:
+      - QUESTION: Multiple choice (A, B, C, D, E)
+      - All existing types: TEXT, TABLE, LIST, etc.
+   
+   5. Reliable Parsing with parseSections()
+      - Structured markers for consistent parsing
+      - Fallback parser for legacy compatibility
+`);
 
     // Cleanup
     console.log('\n✨ Demo complete!');
