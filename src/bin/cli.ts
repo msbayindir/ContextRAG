@@ -9,7 +9,7 @@ const program = new Command();
 program
     .name('context-rag')
     .description('Context-RAG CLI - Setup and management tools')
-    .version('0.1.0');
+    .version('1.0.0-beta.1');
 
 program
     .command('init')
@@ -68,19 +68,20 @@ program
 // Context-RAG Models
 // ============================================
 
+/// Stores prompt configurations for different document types
 model ContextRagPromptConfig {
   id            String   @id @default(uuid())
-  documentType  String
+  documentType  String   @map("document_type")
   name          String
-  systemPrompt  String   @db.Text
-  chunkStrategy Json
+  systemPrompt  String   @map("system_prompt") @db.Text
+  chunkStrategy Json     @map("chunk_strategy")
   version       Int      @default(1)
-  isActive      Boolean  @default(true)
-  isDefault     Boolean  @default(false)
-  createdBy     String?
-  changeLog     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isActive      Boolean  @default(true) @map("is_active")
+  isDefault     Boolean  @default(false) @map("is_default")
+  createdBy     String?  @map("created_by")
+  changeLog     String?  @map("change_log")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   chunks ContextRagChunk[]
 
@@ -89,80 +90,110 @@ model ContextRagPromptConfig {
   @@map("context_rag_prompt_configs")
 }
 
+/// Stores vector chunks for semantic search
 model ContextRagChunk {
   id             String   @id @default(uuid())
-  promptConfigId String
+  promptConfigId String   @map("prompt_config_id")
   promptConfig   ContextRagPromptConfig @relation(fields: [promptConfigId], references: [id], onDelete: Cascade)
-  documentId     String
-  chunkIndex     Int
-  chunkType      String
+  documentId     String   @map("document_id")
+  chunkIndex     Int      @map("chunk_index")
+  chunkType      String   @map("chunk_type")
 
-  searchContent  String   @db.Text
-  searchVector   Unsupported("vector(768)")
-  displayContent String   @db.Text
+  /// Plain text content optimized for vector search
+  searchContent  String   @map("search_content") @db.Text
 
-  sourcePageStart Int
-  sourcePageEnd   Int
-  confidenceScore Float    @default(0.5)
+  /// Enriched content: context + searchContent (for RAG enhancement)
+  enrichedContent String? @map("enriched_content") @db.Text
+
+  /// AI-generated context text only (for debugging)
+  contextText    String?  @map("context_text") @db.Text
+
+  /// Vector embedding (768 dimensions for Gemini)
+  searchVector   Unsupported("vector(768)") @map("search_vector")
+
+  /// Rich Markdown content for display
+  displayContent String   @map("display_content") @db.Text
+
+  sourcePageStart Int     @map("source_page_start")
+  sourcePageEnd   Int     @map("source_page_end")
+  confidenceScore Float   @default(0.5) @map("confidence_score")
   metadata        Json
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([promptConfigId])
   @@index([documentId])
   @@index([chunkType])
+  @@index([confidenceScore])
   @@map("context_rag_chunks")
 }
 
+/// Tracks document processing state
 model ContextRagDocument {
   id           String   @id @default(uuid())
   filename     String
-  fileHash     String   @unique
-  fileSize     Int
-  pageCount    Int
-  documentType String?
+  fileHash     String   @map("file_hash")
+  fileSize     Int      @map("file_size")
+  pageCount    Int      @map("page_count")
+  documentType String?  @map("document_type")
+
+  /// Experiment identifier for A/B testing models
+  experimentId String?  @map("experiment_id")
+
+  /// AI model used for processing
+  modelName    String?  @map("model_name")
+
+  /// Model configuration as JSON
+  modelConfig  Json?    @map("model_config")
+
   status       String   @default("PENDING")
 
-  promptConfigId   String?
-  totalBatches     Int @default(0)
-  completedBatches Int @default(0)
-  failedBatches    Int @default(0)
+  promptConfigId   String? @map("prompt_config_id")
+  totalBatches     Int     @default(0) @map("total_batches")
+  completedBatches Int     @default(0) @map("completed_batches")
+  failedBatches    Int     @default(0) @map("failed_batches")
 
-  tokenUsage   Json?
-  processingMs Int?
-  errorMessage String?
+  tokenUsage   Json?    @map("token_usage")
+  processingMs Int?     @map("processing_ms")
+  errorMessage String?  @map("error_message")
 
-  createdAt   DateTime  @default(now())
-  completedAt DateTime?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
 
   batches ContextRagBatch[]
 
+  @@unique([fileHash, experimentId])
   @@index([status])
   @@index([fileHash])
+  @@index([documentType])
+  @@index([experimentId])
   @@map("context_rag_documents")
 }
 
+/// Tracks individual batch processing jobs
 model ContextRagBatch {
   id         String @id @default(uuid())
-  documentId String
+  documentId String @map("document_id")
   document   ContextRagDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  batchIndex Int
-  pageStart  Int
-  pageEnd    Int
+  batchIndex Int    @map("batch_index")
+  pageStart  Int    @map("page_start")
+  pageEnd    Int    @map("page_end")
   status     String @default("PENDING")
-  retryCount Int    @default(0)
-  lastError  String?
+  retryCount Int    @default(0) @map("retry_count")
+  lastError  String? @map("last_error")
 
-  tokenUsage   Json?
-  processingMs Int?
+  tokenUsage   Json? @map("token_usage")
+  processingMs Int?  @map("processing_ms")
 
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  @@unique([documentId, batchIndex])
   @@index([documentId, status])
+  @@index([status])
   @@map("context_rag_batches")
 }
 `;
