@@ -20,7 +20,7 @@ import { AnthropicHandler } from './anthropic/anthropic.handler.js';
  */
 export function createEnhancementHandler(
     config: RagEnhancementConfig | undefined,
-    resolvedConfig: ResolvedConfig,
+    _resolvedConfig: ResolvedConfig,
     gemini: GeminiService
 ): EnhancementHandler {
     if (!config || config.approach === 'none') {
