@@ -35,6 +35,21 @@ yarn add context-rag
 
 ---
 
+## 🖥️ CLI Commands
+
+```bash
+# Initialize Context-RAG in your project (adds Prisma models to your schema)
+npx @msbayindir/context-rag init
+
+# Force overwrite existing models
+npx @msbayindir/context-rag init --force
+
+# Check setup status (Prisma models, pgvector, env variables)
+npx @msbayindir/context-rag status
+```
+
+---
+
 ## 🛠️ Prerequisites
 
 ### 1. PostgreSQL with pgvector Extension
