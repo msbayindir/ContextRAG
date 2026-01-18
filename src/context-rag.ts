@@ -149,6 +149,7 @@ export class ContextRAG {
                 ...DEFAULT_LOG_CONFIG,
                 ...userConfig.logging,
             },
+            ragEnhancement: userConfig.ragEnhancement,
         };
     }
 

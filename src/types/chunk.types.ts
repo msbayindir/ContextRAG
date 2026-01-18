@@ -110,6 +110,10 @@ export interface CreateChunkInput {
     chunkType: ChunkType;
     searchContent: string;
     displayContent: string;
+    /** Enriched content: context + searchContent (for RAG enhancement) */
+    enrichedContent?: string;
+    /** AI-generated context text only (for debugging) */
+    contextText?: string;
     sourcePageStart: number;
     sourcePageEnd: number;
     confidenceScore: number;

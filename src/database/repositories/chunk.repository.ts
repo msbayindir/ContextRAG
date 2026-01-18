@@ -23,7 +23,7 @@ export class ChunkRepository {
             const result = await this.prisma.$queryRaw`
         INSERT INTO context_rag_chunks (
           id, prompt_config_id, document_id, chunk_index, chunk_type,
-          search_content, search_vector, display_content,
+          search_content, enriched_content, context_text, search_vector, display_content,
           source_page_start, source_page_end, confidence_score, metadata, created_at
         ) VALUES (
           gen_random_uuid(),
@@ -32,6 +32,8 @@ export class ChunkRepository {
           ${input.chunkIndex},
           ${input.chunkType},
           ${input.searchContent},
+          ${input.enrichedContent ?? null},
+          ${input.contextText ?? null},
           ${embedding}::vector,
           ${input.displayContent},
           ${input.sourcePageStart},
@@ -71,7 +73,7 @@ export class ChunkRepository {
                 const result = await tx.$queryRaw`
           INSERT INTO context_rag_chunks (
             id, prompt_config_id, document_id, chunk_index, chunk_type,
-            search_content, search_vector, display_content,
+            search_content, enriched_content, context_text, search_vector, display_content,
             source_page_start, source_page_end, confidence_score, metadata, created_at
           ) VALUES (
             gen_random_uuid(),
@@ -80,6 +82,8 @@ export class ChunkRepository {
             ${input.chunkIndex},
             ${input.chunkType},
             ${input.searchContent},
+            ${input.enrichedContent ?? null},
+            ${input.contextText ?? null},
             ${embedding}::vector,
             ${input.displayContent},
             ${input.sourcePageStart},

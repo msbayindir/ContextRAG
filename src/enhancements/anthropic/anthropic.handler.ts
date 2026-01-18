@@ -14,7 +14,10 @@ import type {
     DocumentContext
 } from '../../types/rag-enhancement.types.js';
 import { DEFAULT_ANTHROPIC_CONFIG as DEFAULTS } from '../../types/rag-enhancement.types.js';
-import type { GeminiService } from '../../services/gemini.service.js';
+import { GeminiService } from '../../services/gemini.service.js';
+import type { ResolvedConfig } from '../../types/config.types.js';
+import { RateLimiter } from '../../utils/rate-limiter.js';
+import { createLogger } from '../../utils/logger.js';
 import pLimit from 'p-limit';
 
 export class AnthropicHandler implements EnhancementHandler {
@@ -23,11 +26,28 @@ export class AnthropicHandler implements EnhancementHandler {
     private readonly limit: ReturnType<typeof pLimit>;
     private readonly skipTypes: Set<string>;
 
-    constructor(config: AnthropicContextualConfig, gemini: GeminiService) {
+    constructor(
+        config: AnthropicContextualConfig,
+        mainGemini: GeminiService,
+        resolvedConfig: ResolvedConfig
+    ) {
         this.config = config;
-        this.gemini = gemini;
         this.limit = pLimit(config.concurrencyLimit ?? DEFAULTS.concurrencyLimit);
         this.skipTypes = new Set(config.skipChunkTypes ?? DEFAULTS.skipChunkTypes);
+
+        // If a separate model is specified for enhancement, create a new GeminiService
+        if (config.model && config.model !== resolvedConfig.model) {
+            console.log(`[AnthropicHandler] Using separate model for enhancement: ${config.model}`);
+            const enhancementConfig: ResolvedConfig = {
+                ...resolvedConfig,
+                model: config.model,
+            };
+            const rateLimiter = new RateLimiter(resolvedConfig.rateLimitConfig);
+            const logger = createLogger(resolvedConfig.logging);
+            this.gemini = new GeminiService(enhancementConfig, rateLimiter, logger);
+        } else {
+            this.gemini = mainGemini;
+        }
     }
 
     shouldSkip(chunkType: string): boolean {

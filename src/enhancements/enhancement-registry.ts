@@ -23,13 +23,14 @@ export function createEnhancementHandler(
     _resolvedConfig: ResolvedConfig,
     gemini: GeminiService
 ): EnhancementHandler {
+
     if (!config || config.approach === 'none') {
         return new NoOpHandler();
     }
 
     switch (config.approach) {
         case 'anthropic_contextual':
-            return new AnthropicHandler(config, gemini);
+            return new AnthropicHandler(config, gemini, _resolvedConfig);
 
         case 'google_grounding':
             // Future implementation

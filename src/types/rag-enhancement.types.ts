@@ -48,6 +48,12 @@ export interface AnthropicContextualConfig {
     approach: 'anthropic_contextual';
     strategy: AnthropicStrategy;
 
+    /** Model to use for context generation (default: uses main model)
+     * Use a faster model like 'gemini-2.5-flash' for higher RPM
+     * Example: 'gemini-2.5-flash', 'gemini-3-flash'
+     */
+    model?: string;
+
     /** For 'simple': template pattern
      * Available placeholders: {documentType}, {chunkType}, {page}, {parentHeading}
      * Example: "[{documentType}] [{chunkType}] Page {page}"

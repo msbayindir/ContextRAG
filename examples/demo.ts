@@ -120,15 +120,17 @@ async function main() {
     const rag = new ContextRAG({
         prisma,
         geminiApiKey: process.env.GEMINI_API_KEY!,
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-pro-preview',  // Main model for PDF extraction (best quality)
         generationConfig: {
             temperature: 0.2, // Lower temperature for accurate extraction
             maxOutputTokens: 8192 * 2,
         },
-        // NEW: Enable Contextual Retrieval Enhancement
+        // NEW: Enable Contextual Retrieval Enhancement with separate model
         ragEnhancement: {
             approach: 'anthropic_contextual',
-            strategy: 'simple', // Using 'simple' (template) for demo speed. Use 'llm' for best quality.
+            strategy: 'llm',
+            model: 'gemini-2.5-flash',  // Faster model for context generation (high RPM)
+            skipChunkTypes: ['HEADING', 'IMAGE_REF', 'TABLE', 'CODE', 'QUOTE', 'MIXED', 'QUESTION', 'LIST'],
         },
         batchConfig: {
             pagesPerBatch: 15,
