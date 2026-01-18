@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI, type GenerativeModel, type Part, TaskType } from '@google/generative-ai';
 import { GoogleAIFileManager } from '@google/generative-ai/server';
+import { z } from 'zod';
+import { zodToGeminiSchema } from '../schemas/structured-output.schemas.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { TokenUsage } from '../types/chunk.types.js';
 import { RateLimitError } from '../errors/index.js';
@@ -370,6 +372,117 @@ export class GeminiService {
                     total: usage?.totalTokenCount ?? 0,
                 },
             };
+        } catch (error) {
+            this.handleError(error as Error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generate structured data from text prompt
+     */
+    async generateStructured<T>(
+        prompt: string,
+        schema: z.ZodType<T, any, any>,
+        options?: {
+            temperature?: number;
+            maxOutputTokens?: number;
+        }
+    ): Promise<{ data: T; tokenUsage: TokenUsage }> {
+        await this.rateLimiter.acquire();
+
+        try {
+            const result = await this.model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    responseSchema: zodToGeminiSchema(schema) as any,
+                    temperature: options?.temperature ?? 0.2,
+                    maxOutputTokens: options?.maxOutputTokens,
+                },
+            });
+
+            const response = result.response;
+            const text = response.text();
+            const usage = response.usageMetadata;
+
+            this.rateLimiter.reportSuccess();
+
+            try {
+                const parsed = JSON.parse(text);
+                const data = schema.parse(parsed);
+                return {
+                    data,
+                    tokenUsage: {
+                        input: usage?.promptTokenCount ?? 0,
+                        output: usage?.candidatesTokenCount ?? 0,
+                        total: usage?.totalTokenCount ?? 0,
+                    }
+                };
+            } catch (e) {
+                // If it fails, fallback logic or retry might be handled by caller
+                // but we should provide detailed error
+                throw new Error(`Structured output validation failed: ${JSON.stringify(e, null, 2)}`);
+            }
+        } catch (error) {
+            this.handleError(error as Error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generate structured data from PDF
+     */
+    async generateStructuredWithPdf<T>(
+        pdfUri: string,
+        prompt: string,
+        schema: z.ZodType<T, any, any>,
+        options?: {
+            temperature?: number;
+            maxOutputTokens?: number;
+        }
+    ): Promise<{ data: T; tokenUsage: TokenUsage }> {
+        await this.rateLimiter.acquire();
+
+        try {
+            const result = await this.model.generateContent({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [
+                            { fileData: { mimeType: 'application/pdf', fileUri: pdfUri } },
+                            { text: prompt },
+                        ],
+                    },
+                ],
+                generationConfig: {
+                    responseMimeType: 'application/json',
+                    responseSchema: zodToGeminiSchema(schema) as any,
+                    temperature: options?.temperature ?? 0.2,
+                    maxOutputTokens: options?.maxOutputTokens,
+                },
+            });
+
+            const response = result.response;
+            const text = response.text();
+            const usage = response.usageMetadata;
+
+            this.rateLimiter.reportSuccess();
+
+            try {
+                const parsed = JSON.parse(text);
+                const data = schema.parse(parsed);
+                return {
+                    data,
+                    tokenUsage: {
+                        input: usage?.promptTokenCount ?? 0,
+                        output: usage?.candidatesTokenCount ?? 0,
+                        total: usage?.totalTokenCount ?? 0,
+                    }
+                };
+            } catch (e) {
+                throw new Error(`Structured output validation failed: ${JSON.stringify(e, null, 2)}`);
+            }
         } catch (error) {
             this.handleError(error as Error);
             throw error;

@@ -30,6 +30,7 @@ import {
 } from '../utils/chunk-parser.js';
 import { createEnhancementHandler } from '../enhancements/enhancement-registry.js';
 import type { EnhancementHandler, DocumentContext, ChunkData } from '../types/rag-enhancement.types.js';
+import { SectionArraySchema, type SectionArray } from '../schemas/index.js';
 
 /**
  * Ingestion engine for processing documents
@@ -315,29 +316,60 @@ export class IngestionEngine {
         try {
             const result = await withRetry(
                 async () => {
-                    // Build structured extraction prompt using template
-                    const prompt = buildExtractionPrompt(
-                        documentInstructions,
-                        exampleFormats,
-                        batch.pageStart,
-                        batch.pageEnd
-                    );
+                    // Build prompt based on whether we use structured output or legacy
+                    const useStructured = this.config.useStructuredOutput;
 
-                    // Use Files API with cached PDF URI (optimized)
-                    const fullPrompt = `${prompt}
+                    const getPrompt = (structured: boolean) => {
+                        const basePrompt = buildExtractionPrompt(
+                            documentInstructions,
+                            exampleFormats,
+                            batch.pageStart,
+                            batch.pageEnd,
+                            structured
+                        );
+                        return `${basePrompt}
                     
                     IMPORTANT: You have the FULL document. Restrict your extraction STRICTLY to pages ${batch.pageStart} to ${batch.pageEnd}. Do not extract content from other pages.`;
+                    };
 
-                    const response = await this.gemini.generateWithPdfUri(
+                    // Try structured output first if enabled
+                    if (useStructured) {
+                        try {
+                            const structuredResponse = await this.gemini.generateStructuredWithPdf(
+                                fileUri,
+                                getPrompt(true),
+                                SectionArraySchema,
+                                {
+                                    temperature: this.config.generationConfig?.temperature,
+                                    maxOutputTokens: this.config.generationConfig?.maxOutputTokens,
+                                }
+                            );
+
+                            this.logger.debug('Structured extraction success', {
+                                batchId: batch.id,
+                                chunkCount: structuredResponse.data.length
+                            });
+
+                            return structuredResponse;
+                        } catch (structuredError) {
+                            this.logger.warn('Structured extraction failed, falling back to legacy parsing', {
+                                batchId: batch.id,
+                                error: (structuredError as Error).message
+                            });
+                            // Fallback to legacy text generation
+                        }
+                    }
+
+                    // Fallback to legacy text generation (or if structured output disabled)
+                    // Note: We deliberately use legacy prompt (false) here to ensure XML tags are present for regex parser
+                    return await this.gemini.generateWithPdfUri(
                         fileUri,
-                        fullPrompt,
+                        getPrompt(false),
                         {
                             temperature: this.config.generationConfig?.temperature,
                             maxOutputTokens: this.config.generationConfig?.maxOutputTokens,
                         }
                     );
-
-                    return response;
                 },
                 {
                     ...retryOptions,
@@ -359,14 +391,47 @@ export class IngestionEngine {
                 }
             );
 
-            // Parse AI output using structured section parser
-            const chunks = this.parseContentToChunks(
-                result.text,
-                promptConfigId,
-                documentId,
-                batch.pageStart,
-                batch.pageEnd
-            );
+            // Process results based on response type
+            let chunks: CreateChunkInput[];
+
+            // Check if result is structured data or text response
+            if ('data' in result && Array.isArray(result.data)) {
+                // Handle Structured Output
+                const sections = result.data as SectionArray;
+
+                chunks = sections.map((section, index) => ({
+                    promptConfigId,
+                    documentId,
+                    chunkIndex: index,
+                    chunkType: section.type,
+                    searchContent: cleanForSearch(section.content),
+                    displayContent: section.content,
+                    sourcePageStart: section.page,
+                    sourcePageEnd: section.page,
+                    confidenceScore: section.confidence,
+                    metadata: {
+                        type: section.type,
+                        pageRange: { start: section.page, end: section.page },
+                        confidence: {
+                            score: section.confidence,
+                            category: section.confidence >= 0.8 ? 'HIGH' :
+                                section.confidence >= 0.5 ? 'MEDIUM' : 'LOW'
+                        },
+                        parsedWithStructuredMarkers: true,
+                        parsingMethod: 'gemini_response_schema'
+                    },
+                }));
+            } else {
+                // Handle Legacy Text Response
+                const textResponse = result as { text: string };
+                chunks = this.parseContentToChunks(
+                    textResponse.text,
+                    promptConfigId,
+                    documentId,
+                    batch.pageStart,
+                    batch.pageEnd
+                );
+            }
 
             // RAG Enhancement: Generate context for each chunk (Anthropic-style)
             const docContext: DocumentContext = {

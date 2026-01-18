@@ -36,10 +36,10 @@ Analyze the document and return ONLY a JSON response with the following structur
     "Specific instruction 3 for this document type"
   ],
   
-  "exampleFormats": {
-    "example1": "How a specific format should look",
-    "example2": "Another format example"
-  },
+  "exampleFormats": [
+    { "element": "table", "format": "Markdown table with headers" },
+    { "element": "code", "format": "Code block with language tag" }
+  ],
   
   "chunkStrategy": {
     "maxTokens": 800,
@@ -74,11 +74,36 @@ export const BASE_EXTRACTION_TEMPLATE = `You are a document processing AI. Extra
 
 ## OUTPUT FORMAT (MANDATORY - DO NOT MODIFY)
 
-Use this structure for EVERY content section:
+⚠️ CRITICAL: You MUST use EXACTLY this marker format. Any deviation will cause parsing errors:
 
+\`\`\`
 <!-- SECTION type="[TYPE]" page="[PAGE]" confidence="[0.0-1.0]" -->
 [Content here in Markdown format]
 <!-- /SECTION -->
+\`\`\`
+
+### EXAMPLE OUTPUT (FOLLOW THIS EXACTLY):
+\`\`\`
+<!-- SECTION type="HEADING" page="1" confidence="0.95" -->
+# Introduction to Metabolism
+<!-- /SECTION -->
+
+<!-- SECTION type="TEXT" page="1" confidence="0.92" -->
+Metabolism refers to all chemical reactions in an organism...
+<!-- /SECTION -->
+
+<!-- SECTION type="LIST" page="2" confidence="0.90" -->
+- First item in the list
+- Second item in the list
+- Third item in the list
+<!-- /SECTION -->
+
+<!-- SECTION type="TABLE" page="2" confidence="0.88" -->
+| Column1 | Column2 |
+|---------|---------|
+| Data1   | Data2   |
+<!-- /SECTION -->
+\`\`\`
 
 ### Valid Types:
 - TEXT: Regular paragraphs and prose
@@ -158,6 +183,31 @@ Use this structure for EVERY content section:
 `;
 
 // ============================================
+// STRUCTURED EXTRACTION TEMPLATE
+// ============================================
+
+/**
+ * Template for structured content extraction via JSON Schema.
+ * Focuses on accuracy and following instructions, without legacy marker noise.
+ */
+export const STRUCTURED_EXTRACTION_TEMPLATE = `You are a document processing AI. Extract content from the provided document pages.
+
+Your goal is to extract content accurately, preserving the logical structure and semantics.
+
+## INSTRUCTIONS
+{{DOCUMENT_INSTRUCTIONS}}
+
+## PAGE RANGE
+{{PAGE_RANGE}}
+
+IMPORTANT:
+1. Extract content strictly from the specified page range.
+2. Maintain the order of elements as they appear in the document.
+3. Don't summarize code blocks or tables; extract them fully.
+4. Follow the specific document instructions provided above.
+`;
+
+// ============================================
 // DEFAULT DOCUMENT INSTRUCTIONS
 // ============================================
 
@@ -182,9 +232,10 @@ export const DEFAULT_DOCUMENT_INSTRUCTIONS = `
  */
 export function buildExtractionPrompt(
   documentInstructions: string[],
-  exampleFormats?: Record<string, string>,
+  exampleFormats?: Array<{ element: string; format: string }> | Record<string, string>,
   pageStart?: number,
-  pageEnd?: number
+  pageEnd?: number,
+  useStructuredOutput: boolean = false
 ): string {
   // Build instructions section
   let instructionsBlock = documentInstructions
@@ -192,10 +243,22 @@ export function buildExtractionPrompt(
     .join('\n');
 
   // Add example formats if provided
-  if (exampleFormats && Object.keys(exampleFormats).length > 0) {
+  // Normalize example formats to array
+  let formats: Array<{ element: string; format: string }> = [];
+  if (Array.isArray(exampleFormats)) {
+    formats = exampleFormats;
+  } else if (exampleFormats) {
+    formats = Object.entries(exampleFormats).map(([key, value]) => ({
+      element: key,
+      format: value
+    }));
+  }
+
+  // Add example formats if provided
+  if (formats.length > 0) {
     instructionsBlock += '\n\n### Example Formats:\n';
-    for (const [key, value] of Object.entries(exampleFormats)) {
-      instructionsBlock += `- **${key}**: \`${value}\`\n`;
+    for (const example of formats) {
+      instructionsBlock += `- **${example.element}**: \`${example.format}\`\n`;
     }
   }
 
@@ -209,7 +272,9 @@ export function buildExtractionPrompt(
     }
   }
 
-  return BASE_EXTRACTION_TEMPLATE
+  const template = useStructuredOutput ? STRUCTURED_EXTRACTION_TEMPLATE : BASE_EXTRACTION_TEMPLATE;
+
+  return template
     .replace('{{DOCUMENT_INSTRUCTIONS}}', instructionsBlock || DEFAULT_DOCUMENT_INSTRUCTIONS)
     .replace('{{PAGE_RANGE}}', pageRange);
 }
@@ -232,10 +297,13 @@ export function buildDiscoveryPrompt(documentTypeHint?: string): string {
 
 /**
  * Regex pattern to match SECTION blocks in AI output
+ * Supports both formats:
+ * - <!-- SECTION type="TEXT" page="1" confidence="0.9" --> (preferred)
+ * - <!-- SECTION TEXT page="1" confidence="0.9" --> (legacy/fallback)
  */
-export const SECTION_PATTERN = /<!-- SECTION type="(\w+)" page="(\d+)" confidence="([\d.]+)" -->\n?([\s\S]*?)\n?<!-- \/SECTION -->/g;
+export const SECTION_PATTERN = /<!-- SECTION (?:type=")?(\w+)"? page="(\d+)" confidence="([\d.]+)" -->\n?([\s\S]*?)\n?<!-- \/SECTION -->/g;
 
 /**
  * Regex pattern for single SECTION match
  */
-export const SECTION_PATTERN_SINGLE = /<!-- SECTION type="(\w+)" page="(\d+)" confidence="([\d.]+)" -->\n?([\s\S]*?)\n?<!-- \/SECTION -->/;
+export const SECTION_PATTERN_SINGLE = /<!-- SECTION (?:type=")?(\w+)"? page="(\d+)" confidence="([\d.]+)" -->\n?([\s\S]*?)\n?<!-- \/SECTION -->/;

@@ -39,7 +39,7 @@ export interface DiscoveryResult {
     /** Document-specific extraction instructions (NEW) */
     specialInstructions: string[];
     /** Example formats for consistent extraction (NEW) */
-    exampleFormats?: Record<string, string>;
+    exampleFormats?: Array<{ element: string; format: string }>;
     /** AI-generated system prompt for ingestion (DEPRECATED - use specialInstructions) */
     suggestedPrompt?: string;
     /** Suggested chunking strategy */

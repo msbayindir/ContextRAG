@@ -97,6 +97,8 @@ export interface ContextRAGConfig {
     logging?: Partial<LogConfig>;
     /** RAG Enhancement configuration (Contextual Retrieval, etc.) */
     ragEnhancement?: RagEnhancementConfig;
+    /** Enable structured output (JSON schema) for better reliability (default: true) */
+    useStructuredOutput?: boolean;
 }
 
 /**
@@ -113,6 +115,7 @@ export interface ResolvedConfig {
     rateLimitConfig: RateLimitConfig;
     logging: LogConfig;
     ragEnhancement?: RagEnhancementConfig;
+    useStructuredOutput: boolean;
 }
 
 /**

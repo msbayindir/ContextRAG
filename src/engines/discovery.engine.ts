@@ -2,9 +2,7 @@ import type { ResolvedConfig } from '../types/config.types.js';
 import type {
     DiscoveryResult,
     DiscoveryOptions,
-    DetectedElement,
 } from '../types/discovery.types.js';
-import type { ChunkStrategy } from '../types/chunk.types.js';
 import { GeminiService } from '../services/gemini.service.js';
 import { PDFProcessor } from '../services/pdf.processor.js';
 import type { Logger } from '../utils/logger.js';
@@ -12,6 +10,7 @@ import { RateLimiter } from '../utils/rate-limiter.js';
 import { generateCorrelationId } from '../utils/index.js';
 import { DEFAULT_CHUNK_STRATEGY } from '../types/prompt.types.js';
 import { buildDiscoveryPrompt } from '../config/templates.js';
+import { DiscoveryResponseSchema, type DiscoveryResponse } from '../schemas/index.js';
 
 /**
  * Discovery session storage
@@ -24,21 +23,7 @@ interface DiscoverySession {
     expiresAt: Date;
 }
 
-/**
- * Parsed discovery response from AI
- */
-interface DiscoveryAIResponse {
-    documentType: string;
-    documentTypeName: string;
-    language?: string;
-    complexity?: 'low' | 'medium' | 'high';
-    detectedElements: DetectedElement[];
-    specialInstructions: string[];
-    exampleFormats?: Record<string, string>;
-    chunkStrategy?: Partial<ChunkStrategy>;
-    confidence: number;
-    reasoning: string;
-}
+// Note: DiscoveryAIResponse replaced by Zod schema DiscoveryResponseSchema
 
 /**
  * Discovery engine for automatic prompt generation
@@ -79,44 +64,61 @@ export class DiscoveryEngine {
         // Build discovery prompt from template
         const prompt = buildDiscoveryPrompt(options.documentTypeHint);
 
-        // Call Gemini with full document via Files API
-        const response = await this.gemini.generateWithPdfUri(fileUri, prompt);
-
-        // Parse response
-        let analysisResult: DiscoveryAIResponse;
+        // Call Gemini with structured output (native JSON schema)
+        let analysisResult: DiscoveryResponse;
 
         try {
-            // Extract JSON from response (handle markdown code blocks)
-            let jsonStr = response.text;
-            const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/) || jsonStr.match(/```\s*([\s\S]*?)\s*```/);
-            if (jsonMatch?.[1]) {
-                jsonStr = jsonMatch[1];
-            }
-            analysisResult = JSON.parse(jsonStr) as DiscoveryAIResponse;
+            const response = await this.gemini.generateStructuredWithPdf<DiscoveryResponse>(
+                fileUri,
+                prompt,
+                DiscoveryResponseSchema
+            );
+            // Ensure detectedElements has default value
+            analysisResult = {
+                ...response.data,
+                detectedElements: response.data.detectedElements ?? [],
+            };
 
-            // Validate required fields
-            if (!analysisResult.documentType) {
-                throw new Error('Missing documentType in response');
-            }
-            if (!Array.isArray(analysisResult.specialInstructions)) {
-                // Fallback: convert old suggestedPrompt to instructions if present
-                analysisResult.specialInstructions = this.getDefaultInstructions();
-            }
-        } catch (parseError) {
-            this.logger.warn('Failed to parse discovery response as JSON, using defaults', {
-                error: (parseError as Error).message,
+            this.logger.debug('Structured discovery response received', {
+                documentType: analysisResult.documentType,
+                confidence: analysisResult.confidence,
+            });
+        } catch (structuredError) {
+            this.logger.warn('Structured output failed, trying legacy parsing', {
+                error: (structuredError as Error).message,
             });
 
-            // Use defaults
-            analysisResult = {
-                documentType: options.documentTypeHint ?? 'General',
-                documentTypeName: options.documentTypeHint ?? 'General Document',
-                detectedElements: [],
-                specialInstructions: this.getDefaultInstructions(),
-                chunkStrategy: DEFAULT_CHUNK_STRATEGY,
-                confidence: 0.5,
-                reasoning: 'Failed to parse AI response, using default configuration',
-            };
+            // Fallback to legacy parsing
+            try {
+                const response = await this.gemini.generateWithPdfUri(fileUri, prompt);
+                let jsonStr = response.text;
+                const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/) || jsonStr.match(/```\s*([\s\S]*?)\s*```/);
+                if (jsonMatch?.[1]) {
+                    jsonStr = jsonMatch[1];
+                }
+                const parsed = JSON.parse(jsonStr);
+                analysisResult = DiscoveryResponseSchema.parse(parsed);
+            } catch (legacyError) {
+                this.logger.warn('All parsing methods failed, using defaults', {
+                    error: (legacyError as Error).message,
+                });
+
+                // Use defaults - cast to satisfy type system
+                analysisResult = {
+                    documentType: options.documentTypeHint ?? 'General',
+                    documentTypeName: options.documentTypeHint ?? 'General Document',
+                    detectedElements: [],
+                    specialInstructions: this.getDefaultInstructions(),
+                    chunkStrategy: {
+                        maxTokens: DEFAULT_CHUNK_STRATEGY.maxTokens,
+                        splitBy: DEFAULT_CHUNK_STRATEGY.splitBy as 'semantic' | 'page' | 'paragraph' | 'section',
+                        preserveTables: DEFAULT_CHUNK_STRATEGY.preserveTables ?? true,
+                        preserveLists: DEFAULT_CHUNK_STRATEGY.preserveLists ?? true,
+                    },
+                    confidence: 0.5,
+                    reasoning: 'Failed to parse AI response, using default configuration',
+                };
+            }
         }
 
         // Build discovery result

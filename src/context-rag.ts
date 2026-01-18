@@ -150,6 +150,7 @@ export class ContextRAG {
                 ...userConfig.logging,
             },
             ragEnhancement: userConfig.ragEnhancement,
+            useStructuredOutput: userConfig.useStructuredOutput ?? true,
         };
     }
 

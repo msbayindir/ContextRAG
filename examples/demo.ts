@@ -170,40 +170,36 @@ async function main() {
     }
 
     // ========================================
-    // TEMPLATE SYSTEM DEMO
+    // JSON SCHEMA DEMO
     // ========================================
     console.log('\n' + '='.repeat(60));
-    console.log('� TEMPLATE SYSTEM DEMO');
+    console.log('🏗️  JSON SCHEMA DEMO');
     console.log('='.repeat(60));
 
-    console.log('\n🔍 Sample Biochemistry Text (TUS Exam):');
-    console.log('-'.repeat(40));
-    console.log(SAMPLE_BIOCHEMISTRY_TEXT.slice(0, 500) + '...\n');
-
-    console.log('\n📋 Expected AI Output Format:');
+    // Show updated expected output
+    console.log('\n📋 Expected AI Output Format (Native JSON):');
     console.log('-'.repeat(40));
     console.log(`
-<!-- SECTION type="HEADING" page="1" confidence="0.95" -->
-## 1. METABOLİZMAYA GİRİŞ
-<!-- /SECTION -->
-
-<!-- SECTION type="TABLE" page="1" confidence="0.92" -->
-| Bileşik | ΔG0 kcal/mol |
-|---------|--------------|
-| Fosfoenol pirüvat | -14.8 |
-| Kreatin fosfat | -10.3 |
-| ATP → ADP + Pi | -7.3 |
-<!-- /SECTION -->
-
-<!-- SECTION type="QUESTION" page="1" confidence="0.94" -->
-**Soru 1:** Diğerlerine göre en yüksek negatif değere sahip olan...?
-A) ATP
-B) Kreatin fosfat
-C) Fosfoenol pirüvat
-D) Glukoz-6-fosfat
-E) ADP
-**Cevap:** C) Fosfoenol pirüvat
-<!-- /SECTION -->
+[
+  {
+    "type": "HEADING",
+    "page": 1,
+    "confidence": 0.99,
+    "content": "# 1. METABOLİZMAYA GİRİŞ"
+  },
+  {
+    "type": "TABLE",
+    "page": 1,
+    "confidence": 0.95,
+    "content": "| Bileşik | ΔG0 kcal/mol |...| Fosfoenol pirüvat | -14.8 |..."
+  },
+  {
+    "type": "QUESTION",
+    "page": 1,
+    "confidence": 0.98,
+    "content": "**Soru 1:** Diğerlerine göre en yüksek negatif değere sahip olan...?"
+  }
+]
 `);
 
     // ========================================
@@ -241,10 +237,18 @@ E) ADP
             }
 
             // NEW: Show exampleFormats
-            if (discovery.exampleFormats && Object.keys(discovery.exampleFormats).length > 0) {
+            if (discovery.exampleFormats && discovery.exampleFormats.length > 0) {
                 console.log(`\n   📐 Example Formats (NEW!):`);
-                for (const [key, value] of Object.entries(discovery.exampleFormats)) {
-                    console.log(`      ${key}: ${value}`);
+                // Check if it's array (new schema) or record (legacy mock fallback if any)
+                if (Array.isArray(discovery.exampleFormats)) {
+                    for (const example of discovery.exampleFormats) {
+                        console.log(`      ${example.element}: ${example.format}`);
+                    }
+                } else {
+                    // Fallback check just in case type is loose
+                    for (const [key, value] of Object.entries(discovery.exampleFormats)) {
+                        console.log(`      ${key}: ${value}`);
+                    }
                 }
             }
 
@@ -319,7 +323,6 @@ E) ADP
                 'Elektron transport zinciri kompleksleri nelerdir?',
                 'Siyanür hangi kompleksi inhibe eder?',
                 'En yüksek enerjili bileşik hangisidir?',
-                'Krebs döngüsü ile ilgili sorular',
             ];
 
             for (const query of queries) {
@@ -343,7 +346,7 @@ E) ADP
                         // Show if parsed with structured markers
                         const metadata = r.chunk.metadata as { parsedWithStructuredMarkers?: boolean };
                         if (metadata?.parsedWithStructuredMarkers) {
-                            console.log(`       ✅ Parsed with structured SECTION markers`);
+                            console.log(`       ✅ Parsed with structured output (Native JSON)`);
                         }
                     });
                 }
@@ -354,24 +357,9 @@ E) ADP
         }
     }
 
-    // ========================================
-    // FINAL STATS
-    // ========================================
+    // Final Summary Update
     console.log('\n' + '='.repeat(60));
-    console.log('📊 FINAL STATS');
-    console.log('='.repeat(60));
-
-    const stats = await rag.getStats();
-    console.log(`\n   Documents: ${stats.totalDocuments}`);
-    console.log(`   Chunks: ${stats.totalChunks}`);
-    console.log(`   Prompt Configs: ${stats.promptConfigs}`);
-    console.log(`   Storage: ${(stats.storageBytes / 1024).toFixed(2)} KB`);
-
-    // ========================================
-    // TEMPLATE SYSTEM SUMMARY
-    // ========================================
-    console.log('\n' + '='.repeat(60));
-    console.log('📚 TEMPLATE SYSTEM SUMMARY');
+    console.log('📚 SYSTEM SUMMARY');
     console.log('='.repeat(60));
 
     console.log(`
@@ -387,12 +375,13 @@ E) ADP
       - Solves "Lost in Middle" problem for isolated chunks (e.g., tables)
       - Hybrid Search (Semantic + Keyword) + Type Boosting
    
-   3. 🔍 Discovery returns specialInstructions[]
-      - Document-specific extraction rules
-      - Example formats for consistency
+   3. 💎 Native Structured Output (JSON Schema)
+      - No more regex parsing or "XML marker" hallucinations
+      - 100% Type-safe extraction using Gemini's responseSchema
+      - Robust fallback to legacy parser if needed
    
    4. ⚡ Parallel Batch Processing
-      - Reliable structured <!-- SECTION --> output
+      - Reliable concurrent execution
       - Robust error handling and retry mechanisms
 `);
 
