@@ -123,7 +123,7 @@ async function main() {
         model: 'gemini-3-pro-preview',  // Main model for PDF extraction (best quality)
         generationConfig: {
             temperature: 0.2, // Lower temperature for accurate extraction
-            maxOutputTokens: 8192 * 2,
+            maxOutputTokens: 8192 * 2 * 4,
         },
         // NEW: Enable Contextual Retrieval Enhancement with separate model
         ragEnhancement: {

@@ -28,6 +28,5 @@ export {
 
     // Gemini converter
     zodToGeminiSchema,
-    GeminiSchemas,
-    type GeminiJsonSchema
+    GeminiSchemas
 } from './structured-output.schemas.js';

@@ -389,45 +389,16 @@ export class GeminiService {
             maxOutputTokens?: number;
         }
     ): Promise<{ data: T; tokenUsage: TokenUsage }> {
-        await this.rateLimiter.acquire();
 
-        try {
-            const result = await this.model.generateContent({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    responseSchema: zodToGeminiSchema(schema) as any,
-                    temperature: options?.temperature ?? 0.2,
-                    maxOutputTokens: options?.maxOutputTokens,
-                },
-            });
 
-            const response = result.response;
-            const text = response.text();
-            const usage = response.usageMetadata;
+        return this.executeStructuredRetry(
+            [{ role: 'user', parts: [{ text: prompt }] }],
+            schema,
+            options
+        );
 
-            this.rateLimiter.reportSuccess();
 
-            try {
-                const parsed = JSON.parse(text);
-                const data = schema.parse(parsed);
-                return {
-                    data,
-                    tokenUsage: {
-                        input: usage?.promptTokenCount ?? 0,
-                        output: usage?.candidatesTokenCount ?? 0,
-                        total: usage?.totalTokenCount ?? 0,
-                    }
-                };
-            } catch (e) {
-                // If it fails, fallback logic or retry might be handled by caller
-                // but we should provide detailed error
-                throw new Error(`Structured output validation failed: ${JSON.stringify(e, null, 2)}`);
-            }
-        } catch (error) {
-            this.handleError(error as Error);
-            throw error;
-        }
+
     }
 
     /**
@@ -440,53 +411,123 @@ export class GeminiService {
         options?: {
             temperature?: number;
             maxOutputTokens?: number;
+            maxRetries?: number;
         }
     ): Promise<{ data: T; tokenUsage: TokenUsage }> {
-        await this.rateLimiter.acquire();
-
-        try {
-            const result = await this.model.generateContent({
-                contents: [
-                    {
-                        role: 'user',
-                        parts: [
-                            { fileData: { mimeType: 'application/pdf', fileUri: pdfUri } },
-                            { text: prompt },
-                        ],
-                    },
-                ],
-                generationConfig: {
-                    responseMimeType: 'application/json',
-                    responseSchema: zodToGeminiSchema(schema) as any,
-                    temperature: options?.temperature ?? 0.2,
-                    maxOutputTokens: options?.maxOutputTokens,
+        return this.executeStructuredRetry(
+            [
+                {
+                    role: 'user',
+                    parts: [
+                        { fileData: { mimeType: 'application/pdf', fileUri: pdfUri } },
+                        { text: prompt },
+                    ],
                 },
-            });
+            ],
+            schema,
+            options
+        );
+    }
 
-            const response = result.response;
-            const text = response.text();
-            const usage = response.usageMetadata;
+    /**
+     * Execute structured generation with retry logic
+     */
+    private async executeStructuredRetry<T>(
+        contents: any[],
+        schema: z.ZodType<T, any, any>,
+        options?: {
+            temperature?: number;
+            maxOutputTokens?: number;
+            maxRetries?: number;
+        }
+    ): Promise<{ data: T; tokenUsage: TokenUsage }> {
+        const maxRetries = options?.maxRetries ?? 2;
+        let attempt = 0;
+        let lastError: any;
 
-            this.rateLimiter.reportSuccess();
+        // Clone contents to build conversation history for feedback loop
+        const currentContents = [...contents];
+
+        while (attempt <= maxRetries) {
+            attempt++;
+            await this.rateLimiter.acquire();
 
             try {
-                const parsed = JSON.parse(text);
-                const data = schema.parse(parsed);
-                return {
-                    data,
-                    tokenUsage: {
-                        input: usage?.promptTokenCount ?? 0,
-                        output: usage?.candidatesTokenCount ?? 0,
-                        total: usage?.totalTokenCount ?? 0,
+                const result = await this.model.generateContent({
+                    contents: currentContents,
+                    generationConfig: {
+                        responseMimeType: 'application/json',
+                        // Cast to any because the new schema format might have slight type mismatch 
+                        // but is valid for the API
+                        responseSchema: zodToGeminiSchema(schema) as any,
+                        temperature: options?.temperature ?? 0.2,
+                        maxOutputTokens: options?.maxOutputTokens,
+                    },
+                });
+
+                const response = result.response;
+                const text = response.text();
+                const usage = response.usageMetadata;
+
+                this.rateLimiter.reportSuccess();
+
+                try {
+                    const parsed = JSON.parse(text);
+                    const data = schema.parse(parsed);
+                    return {
+                        data,
+                        tokenUsage: {
+                            input: usage?.promptTokenCount ?? 0,
+                            output: usage?.candidatesTokenCount ?? 0,
+                            total: usage?.totalTokenCount ?? 0,
+                        }
+                    };
+                } catch (e: any) {
+                    const errorMessage = e instanceof Error ? e.message : String(e);
+                    // Create a brief snippet of the invalid JSON for debugging
+                    const snippet = text.length > 500 ? text.substring(0, 200) + '...[truncated]...' + text.substring(text.length - 200) : text;
+
+                    this.logger.warn(`Structured validation failed (attempt ${attempt}/${maxRetries + 1})`, {
+                        error: errorMessage,
+                        snippet: text.substring(0, 100)
+                    });
+
+                    lastError = new Error(`Structured output validation failed: ${errorMessage}. Raw response snippet: ${snippet}`);
+
+                    if (attempt <= maxRetries) {
+                        // FEEDBACK LOOP: Add the failed response and the error message to history
+                        // This simulates a "human" pointing out the error to the AI
+                        currentContents.push({
+                            role: 'model',
+                            parts: [{ text: text }]
+                        });
+
+                        currentContents.push({
+                            role: 'user',
+                            parts: [{ text: `JSON Validation Error: ${errorMessage}\n\nPlease fix the JSON output to match the schema exactly.` }]
+                        });
+
+                        continue;
                     }
-                };
-            } catch (e) {
-                throw new Error(`Structured output validation failed: ${JSON.stringify(e, null, 2)}`);
+                    throw lastError;
+                }
+            } catch (error) {
+                try {
+                    this.handleError(error as Error);
+                } catch (handledError) {
+                    throw handledError; // Rate limit or fatal
+                }
+
+                lastError = error;
+                if (attempt <= maxRetries) {
+                    this.logger.warn(`Gemini API error (attempt ${attempt}/${maxRetries + 1}), retrying...`, { error: (error as Error).message });
+                    // For network/API errors, we DO NOT update history, just retry the request
+                    continue;
+                }
+                throw error;
             }
-        } catch (error) {
-            this.handleError(error as Error);
-            throw error;
         }
+        throw lastError;
     }
 
     /**

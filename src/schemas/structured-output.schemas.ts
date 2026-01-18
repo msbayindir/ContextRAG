@@ -154,124 +154,67 @@ export const ContextGenerationSchema = z.object({
 
 export type ContextGeneration = z.infer<typeof ContextGenerationSchema>;
 
-// ============================================
-// GEMINI JSON SCHEMA CONVERTER
-// ============================================
-
-/**
- * Gemini API compatible JSON Schema type
- */
-export interface GeminiJsonSchema {
-    type: string;
-    properties?: Record<string, GeminiJsonSchema>;
-    items?: GeminiJsonSchema;
-    enum?: string[];
-    required?: string[];
-    minimum?: number;
-    maximum?: number;
-    minItems?: number;
-    maxItems?: number;
-    description?: string;
-    default?: unknown;
-}
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 /**
  * Convert Zod schema to Gemini-compatible JSON Schema
  * 
+ * Uses zod-to-json-schema to generate a robust JSON schema.
+ * Configured to avoid $ref which Gemini API doesn't support well in some contexts.
+ * 
  * @param zodSchema - Zod schema to convert
  * @returns Gemini-compatible JSON schema
  */
-export function zodToGeminiSchema(zodSchema: z.ZodType): GeminiJsonSchema {
-    const jsonSchema = zodToJsonSchemaInternal(zodSchema);
-    return jsonSchema;
+/**
+ * Convert Zod schema to Gemini-compatible JSON Schema
+ * 
+ * Uses zod-to-json-schema to generate a robust JSON schema.
+ * Configured to avoid $ref which Gemini API doesn't support well in some contexts.
+ * Post-processes the schema to remove fields not supported by Gemini (like additionalProperties).
+ * 
+ * @param zodSchema - Zod schema to convert
+ * @returns Gemini-compatible JSON schema
+ */
+export function zodToGeminiSchema(zodSchema: z.ZodType): any {
+    const jsonSchema = zodToJsonSchema(zodSchema, {
+        target: 'jsonSchema7',
+        $refStrategy: 'none', // Critical: Gemini doesn't support $ref in responseSchema
+        definitionPath: '$defs',
+    });
+
+    return cleanSchemaForGemini(jsonSchema);
 }
 
 /**
- * Internal recursive converter
+ * Remove fields that Gemini API doesn't support
  */
-function zodToJsonSchemaInternal(schema: z.ZodType): GeminiJsonSchema {
-    // Handle ZodObject
-    if (schema instanceof z.ZodObject) {
-        const shape = schema.shape;
-        const properties: Record<string, GeminiJsonSchema> = {};
-        const required: string[] = [];
+/**
+ * Remove fields that Gemini API doesn't support
+ */
+function cleanSchemaForGemini(schema: any): any {
+    if (typeof schema !== 'object' || schema === null) {
+        return schema;
+    }
 
-        for (const [key, value] of Object.entries(shape)) {
-            properties[key] = zodToJsonSchemaInternal(value as z.ZodType);
+    if (Array.isArray(schema)) {
+        return schema.map(cleanSchemaForGemini);
+    }
 
-            // Check if required (not optional)
-            if (!(value instanceof z.ZodOptional)) {
-                required.push(key);
-            }
+    const newObj: any = {};
+    for (const [key, value] of Object.entries(schema)) {
+        // Forbidden fields in Gemini responseSchema
+        if (key === 'additionalProperties' ||
+            key === '$schema' ||
+            key === 'title' ||
+            key === 'default') {
+            continue;
         }
 
-        return {
-            type: 'object',
-            properties,
-            required: required.length > 0 ? required : undefined
-        };
+        // Handle description allow-list logic implicitly by not including it in forbidden
+
+        newObj[key] = cleanSchemaForGemini(value);
     }
-
-    // Handle ZodArray
-    if (schema instanceof z.ZodArray) {
-        return {
-            type: 'array',
-            items: zodToJsonSchemaInternal(schema.element)
-        };
-    }
-
-    // Handle ZodEnum
-    if (schema instanceof z.ZodEnum) {
-        return {
-            type: 'string',
-            enum: schema.options as string[]
-        };
-    }
-
-    // Handle ZodString
-    if (schema instanceof z.ZodString) {
-        return { type: 'string' };
-    }
-
-    // Handle ZodNumber
-    if (schema instanceof z.ZodNumber) {
-        const checks = schema._def.checks;
-        const result: GeminiJsonSchema = { type: 'number' };
-
-        for (const check of checks) {
-            if (check.kind === 'min') {
-                result.minimum = check.value;
-            }
-            if (check.kind === 'max') {
-                result.maximum = check.value;
-            }
-            if (check.kind === 'int') {
-                result.type = 'integer';
-            }
-        }
-
-        return result;
-    }
-
-    // Handle ZodBoolean
-    if (schema instanceof z.ZodBoolean) {
-        return { type: 'boolean' };
-    }
-
-    // Handle ZodOptional
-    if (schema instanceof z.ZodOptional) {
-        return zodToJsonSchemaInternal(schema.unwrap());
-    }
-
-    // Handle ZodDefault
-    if (schema instanceof z.ZodDefault) {
-        const inner = zodToJsonSchemaInternal(schema._def.innerType);
-        inner.default = schema._def.defaultValue();
-        return inner;
-    }
-
-    // Fallback
-    return { type: 'string' };
+    return newObj;
 }
 
 // ============================================
