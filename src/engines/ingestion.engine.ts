@@ -135,11 +135,75 @@ export class IngestionEngine {
                 .split('\n')
                 .map(line => line.trim())
                 .filter(line => line.length > 0);
+
+            // Auto-create PromptConfig if customPrompt is provided but no promptConfigId
+            if (!promptConfigId) {
+                const customDocType = options.documentType ?? 'CustomPrompt';
+                const existingConfig = await this.promptConfigRepo.getDefault(customDocType);
+
+                if (existingConfig) {
+                    // Use existing config
+                    promptConfigId = existingConfig.id;
+                    this.logger.debug('Using existing PromptConfig for customPrompt', {
+                        promptConfigId,
+                        documentType: customDocType
+                    });
+                } else {
+                    // Create new PromptConfig for custom prompt
+                    const newConfig = await this.promptConfigRepo.create({
+                        documentType: customDocType,
+                        name: `Custom Extraction - ${new Date().toISOString().slice(0, 10)}`,
+                        systemPrompt: options.customPrompt,
+                        chunkStrategy: {
+                            maxTokens: 800,
+                            splitBy: 'semantic',
+                            preserveTables: true,
+                            preserveLists: true,
+                        },
+                        setAsDefault: true,
+                        changeLog: 'Auto-created from customPrompt',
+                    });
+                    promptConfigId = newConfig.id;
+                    this.logger.info('Created new PromptConfig for customPrompt', {
+                        promptConfigId,
+                        documentType: customDocType
+                    });
+                }
+            }
         } else if (documentInstructions.length === 0) {
             documentInstructions = DEFAULT_DOCUMENT_INSTRUCTIONS
                 .split('\n')
                 .map(line => line.replace(/^-\s*/, '').trim())
                 .filter(line => line.length > 0);
+
+            // Create default PromptConfig if none exists
+            if (!promptConfigId) {
+                const defaultDocType = options.documentType ?? 'General';
+                const existingConfig = await this.promptConfigRepo.getDefault(defaultDocType);
+
+                if (existingConfig) {
+                    promptConfigId = existingConfig.id;
+                } else {
+                    const newConfig = await this.promptConfigRepo.create({
+                        documentType: defaultDocType,
+                        name: 'Default Extraction',
+                        systemPrompt: DEFAULT_DOCUMENT_INSTRUCTIONS,
+                        chunkStrategy: {
+                            maxTokens: 800,
+                            splitBy: 'semantic',
+                            preserveTables: true,
+                            preserveLists: true,
+                        },
+                        setAsDefault: true,
+                        changeLog: 'Auto-created as system default',
+                    });
+                    promptConfigId = newConfig.id;
+                    this.logger.info('Created default PromptConfig', {
+                        promptConfigId,
+                        documentType: defaultDocType
+                    });
+                }
+            }
         }
 
         // Create batches

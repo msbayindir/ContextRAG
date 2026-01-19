@@ -52,7 +52,7 @@ async function main() {
     const rag = new ContextRAG({
         prisma,
         geminiApiKey: process.env.GEMINI_API_KEY!,
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-pro-preview',
         generationConfig: {
             temperature: 0.2,
             maxOutputTokens: 16384,
@@ -71,8 +71,8 @@ async function main() {
         },
 
         batchConfig: {
-            pagesPerBatch: 10,
-            maxConcurrency: 2,
+            pagesPerBatch: 30,
+            maxConcurrency: 3,
         },
         logging: {
             level: 'info',

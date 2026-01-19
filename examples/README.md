@@ -42,10 +42,27 @@
    cp /path/to/your/document.pdf examples/test.pdf
    ```
 
-2. Run the demo:
+2. Run the full demo:
    ```bash
    npx tsx examples/demo.ts
    ```
+
+3. **NEW:** Run the filtered extraction demo:
+   ```bash
+   npx tsx examples/filtered-extraction-demo.ts
+   ```
+
+### Filtered Extraction Demo
+
+The `filtered-extraction-demo.ts` demonstrates:
+- **Custom Prompt:** Extract only TEXT, QUESTION, LIST, TABLE (skip HEADING, CODE, etc.)
+- **Selective Context:** Context enrichment only for TEXT chunks (cost optimization)
+- **Search Filtering:** Query only specific chunk types
+
+This is useful when you want to:
+- Extract specific content types from a document
+- Reduce context generation costs by skipping non-essential chunks
+- Focus RAG search on particular content categories
 
 ## Expected Output
 

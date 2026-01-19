@@ -276,6 +276,56 @@ const rag = new ContextRAG({
 
 ---
 
+## 🎯 Custom Prompt / Filtered Extraction
+
+Extract only specific content types without going through the Discovery flow:
+
+```typescript
+// Extract ONLY specific types with custom prompt
+const result = await rag.ingest({
+  file: './book.pdf',
+  customPrompt: `
+    Extract ONLY these content types:
+    - TEXT: Normal paragraphs
+    - QUESTION: Multiple choice questions
+    - LIST: Bulleted or numbered lists
+    - TABLE: Data tables
+
+    SKIP these types:
+    - HEADING, CODE, QUOTE, IMAGE_REF
+  `,
+  // Context enrichment only for TEXT chunks (cost optimization)
+  // Configure via ragEnhancement.skipChunkTypes
+});
+```
+
+### Configuration for Selective Context Enrichment
+
+```typescript
+const rag = new ContextRAG({
+  prisma,
+  geminiApiKey: process.env.GEMINI_API_KEY!,
+  
+  ragEnhancement: {
+    approach: 'anthropic_contextual',
+    strategy: 'llm',
+    // Only TEXT chunks get context enrichment
+    // Other types (TABLE, LIST, QUESTION) are extracted but not enriched
+    skipChunkTypes: ['HEADING', 'IMAGE_REF', 'TABLE', 'CODE', 'QUOTE', 'MIXED', 'QUESTION', 'LIST'],
+  },
+});
+
+// PromptConfig is auto-created when using customPrompt
+await rag.ingest({
+  file: './document.pdf',
+  customPrompt: 'Your custom extraction instructions...',
+});
+```
+
+> **Note:** When using `customPrompt` without `promptConfigId`, the system automatically creates a PromptConfig for you.
+
+---
+
 ## ⚙️ Configuration
 
 ```typescript
