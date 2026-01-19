@@ -16,6 +16,9 @@ import { z } from 'zod';
 /**
  * Valid chunk types for document sections
  */
+/**
+ * Valid chunk types for document sections
+ */
 export const ChunkTypeSchema = z.enum([
     'TEXT',
     'TABLE',
@@ -26,7 +29,7 @@ export const ChunkTypeSchema = z.enum([
     'IMAGE_REF',
     'QUESTION',
     'MIXED'
-]);
+]).describe("The type of content in this section. PREFER 'TEXT' for regular paragraphs. Only use 'LIST' for actual bulleted/numbered lists. Only use 'TABLE' for actual tables.");
 
 export type ChunkType = z.infer<typeof ChunkTypeSchema>;
 
@@ -41,11 +44,11 @@ export const SectionSchema = z.object({
     /** Content type */
     type: ChunkTypeSchema,
     /** Source page number (1-indexed) */
-    page: z.number().int().min(1),
+    page: z.number().int().min(1).describe("The page number where this content starts."),
     /** Extraction confidence score (0.0-1.0) */
-    confidence: z.number().min(0).max(1),
+    confidence: z.number().min(0).max(1).describe("Confidence score (0.0-1.0)"),
     /** Extracted content in Markdown format */
-    content: z.string().min(1)
+    content: z.string().min(1).describe("The full extracted content in Markdown. DO NOT summarize. DO NOT break paragraphs into lists. Maintain the original flow.")
 });
 
 export type Section = z.infer<typeof SectionSchema>;

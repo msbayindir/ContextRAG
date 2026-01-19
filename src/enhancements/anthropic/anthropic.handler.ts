@@ -110,17 +110,20 @@ ${doc.fullDocumentText.slice(0, 15000)}
 ${chunk.content}
 </chunk_to_contextualize>
 
-Bu chunk'ın belgede nerede olduğunu ve ne hakkında olduğunu 1-2 cümle ile Türkçe açıkla:`;
+Bu içeriğin belgenin genel akışı içindeki yerini, bağlı olduğu ana başlıkları ve ele aldığı konuyu detaylı bir şekilde özetle. İçeriğin ne olduğunu değil, bağlamını anlat:`;
 
         try {
             // If we have a cached PDF URI, use it for full document context (Anthropic-style)
             if (doc.fileUri) {
-                const chunkPrompt = `Bu chunk'ın belgede nerede olduğunu ve ne hakkında olduğunu 1-2 cümle ile Türkçe açıkla:
+                const chunkPrompt = `Bu içeriğin belgenin genel akışı içindeki yerini, bağlı olduğu ana başlıkları ve ele aldığı konuyu detaylı bir şekilde özetle. İçeriğin ne olduğunu değil, bağlamını anlat:
 
 <chunk>
 ${chunk.content}
 </chunk>`;
-                const result = await this.gemini.generateWithPdfUri(doc.fileUri, chunkPrompt);
+                const result = await this.gemini.generateWithPdfUri(doc.fileUri, chunkPrompt, {
+                    maxOutputTokens: 2048,
+                    temperature: 0.3
+                });
                 return result.text;
             }
 

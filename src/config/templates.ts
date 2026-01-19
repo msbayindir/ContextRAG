@@ -70,7 +70,7 @@ IMPORTANT RULES:
  * Base template for content extraction.
  * Document-specific instructions are injected via {{DOCUMENT_INSTRUCTIONS}}.
  */
-export const BASE_EXTRACTION_TEMPLATE = `You are a document processing AI. Extract content following the EXACT format below.
+export const BASE_EXTRACTION_TEMPLATE = `You are a document processing AI. Extract content from the document with HIGH FIDELITY and DETAIL.
 
 ## OUTPUT FORMAT (MANDATORY - DO NOT MODIFY)
 
@@ -89,7 +89,8 @@ export const BASE_EXTRACTION_TEMPLATE = `You are a document processing AI. Extra
 <!-- /SECTION -->
 
 <!-- SECTION type="TEXT" page="1" confidence="0.92" -->
-Metabolism refers to all chemical reactions in an organism...
+Metabolism refers to all chemical reactions in an organism. It creates energy...
+(Extract full paragraphs, do not break them up unnecessarily)
 <!-- /SECTION -->
 
 <!-- SECTION type="LIST" page="2" confidence="0.90" -->
@@ -106,77 +107,40 @@ Metabolism refers to all chemical reactions in an organism...
 \`\`\`
 
 ### Valid Types:
-- TEXT: Regular paragraphs and prose
-- TABLE: Data tables in Markdown format
-- LIST: Bullet (-) or numbered (1. 2. 3.) lists
-- HEADING: Section headers with # ## ### levels
-- CODE: Code blocks with language specification
-- QUOTE: Quoted text or citations
-- IMAGE_REF: Description of images, charts, figures
-- QUESTION: Multiple choice questions with options (A, B, C, D, E)
+- TEXT: Regular paragraphs and prose. **PREFER THIS** for standard text.
+- TABLE: **ONLY** for explicit data tables in the source.
+- LIST: **ONLY** for explicit bulleted/numbered lists in source.
+- HEADING: Section headers with # ## ### levels.
+- CODE: Code blocks with language specification.
+- QUOTE: Quoted text or citations.
+- IMAGE_REF: Description of images, charts, figures.
+- QUESTION: Multiple choice questions.
 
 ### Format Rules:
-1. **Tables**: Use Markdown table format
-   | Column1 | Column2 | Column3 |
-   |---------|---------|---------|
-   | data    | data    | data    |
-
-2. **Lists**: Use consistent format
-   - Bullet item
-   - Another bullet
-   
-   OR
-   
-   1. Numbered item
-   2. Another numbered
-
-3. **Headings**: Maximum 3 levels, use hierarchy
-   # Main Section
-   ## Subsection
-   ### Sub-subsection
-
-4. **Code**: Specify language
-   \`\`\`python
-   code here
-   \`\`\`
-
-5. **Images**: Describe visual content
-   [IMAGE: Description of what the image shows]
-
-6. **Questions**: Multiple choice questions with options
-   **Question 1:** Question text here?
-   A) Option A text
-   B) Option B text
-   C) Option C text
-   D) Option D text
-   E) Option E text (if exists)
-   **Answer:** [Letter] (if answer is provided in document)
+1. **Tables**: Use Markdown table format.
+2. **Lists**: Use consistent format (bullets or numbers).
+3. **Headings**: Use Markdown headers (#, ##, ###).
+4. **Code**: Use fenced code blocks with language.
+5. **Images**: Describe visual content clearly.
 
 ## DOCUMENT-SPECIFIC INSTRUCTIONS
 {{DOCUMENT_INSTRUCTIONS}}
 
 ## CRITICAL EXTRACTION RULES (DO NOT VIOLATE)
-⚠️ These rules are MANDATORY for legal, medical, and financial document accuracy:
 
 1. **NO SUMMARIZATION**: Extract content EXACTLY as written. Do not summarize, paraphrase, or condense.
-2. **NO INTERPRETATION**: Do not interpret, explain, or add commentary to the content.
-3. **PRESERVE ORIGINAL WORDING**: Keep exact terminology, especially for:
-   - Legal terms, clauses, and article references
-   - Medical terminology, diagnoses, and prescriptions
-   - Financial figures, percentages, and calculations
-   - Technical specifications and measurements
-4. **VERBATIM EXTRACTION**: Copy text word-for-word from the document.
-5. **NO OMISSIONS**: Include all content, even if it seems redundant or repetitive.
-6. **UNCLEAR CONTENT**: If text is unclear or illegible, extract as-is and mark: [UNCLEAR: partial text visible]
-7. **FOREIGN TERMS**: Keep foreign language terms, Latin phrases, and abbreviations exactly as written.
+2. **PRESERVE FLOW**: **DO NOT** break continuous text into lists unless it is explicitly a list in the source. Keep paragraphs together.
+3. **AVOID OVER-SEGMENTATION**: Combine related sentences into single TEXT blocks. Do not create a new section for every sentence.
+4. **PRESERVE ORIGINAL WORDING**: Keep exact terminology, especially for technical, medical, or legal terms.
+5. **NO INTERPRETATION**: Do not interpret or explain the content. Just extract it.
+6. **UNCLEAR CONTENT**: If text is unclear, mark: [UNCLEAR: partial text].
+7. **FOREIGN TERMS**: Keep foreign language terms exactly as written.
 
 ## PROCESSING RULES
-- Extract ALL content completely, do not summarize or skip
-- Preserve original document structure and hierarchy
-- Include page references for each section
-- Maintain technical accuracy and terminology
-- Use appropriate confidence scores based on extraction quality
-- If content spans multiple pages, use the starting page number
+- Extract ALL content completely.
+- Preserve original document structure and hierarchy.
+- Include page references for each section.
+- If content spans multiple pages, use the starting page number.
 
 ## PAGE RANGE
 {{PAGE_RANGE}}
@@ -196,6 +160,13 @@ Your goal is to extract content accurately, preserving the logical structure and
 
 ## INSTRUCTIONS
 {{DOCUMENT_INSTRUCTIONS}}
+
+## CRITICAL RULES (DO NOT VIOLATE)
+1. **NO SUMMARIZATION**: Extract content EXACTLY as written. Do not summarize, paraphrase, or condense.
+2. **PRESERVE FLOW**: **DO NOT** break continuous text into lists unless it is explicitly a list in the source. Keep paragraphs together.
+3. **AVOID OVER-SEGMENTATION**: Combine related sentences into single TEXT blocks. Do not create a new section for every sentence.
+4. **PRESERVE ORIGINAL WORDING**: Keep exact terminology, especially for technical, medical, or legal terms.
+5. **NO INTERPRETATION**: Do not interpret or explain the content. Just extract it.
 
 ## PAGE RANGE
 {{PAGE_RANGE}}
