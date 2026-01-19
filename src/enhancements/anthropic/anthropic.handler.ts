@@ -17,7 +17,7 @@ import { DEFAULT_ANTHROPIC_CONFIG as DEFAULTS } from '../../types/rag-enhancemen
 import { GeminiService } from '../../services/gemini.service.js';
 import type { ResolvedConfig } from '../../types/config.types.js';
 import { RateLimiter } from '../../utils/rate-limiter.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger, type Logger } from '../../utils/logger.js';
 import pLimit from 'p-limit';
 
 export class AnthropicHandler implements EnhancementHandler {
@@ -25,6 +25,7 @@ export class AnthropicHandler implements EnhancementHandler {
     private readonly gemini: GeminiService;
     private readonly limit: ReturnType<typeof pLimit>;
     private readonly skipTypes: Set<string>;
+    private readonly logger: Logger;
 
     constructor(
         config: AnthropicContextualConfig,
@@ -34,11 +35,11 @@ export class AnthropicHandler implements EnhancementHandler {
         this.config = config;
         this.limit = pLimit(config.concurrencyLimit ?? DEFAULTS.concurrencyLimit);
         this.skipTypes = new Set(config.skipChunkTypes ?? DEFAULTS.skipChunkTypes);
+        this.logger = createLogger(resolvedConfig.logging);
 
         // If a separate model is specified for enhancement, create a new GeminiService
         if (config.model && config.model !== resolvedConfig.model) {
-            // eslint-disable-next-line no-console
-            console.log(`[AnthropicHandler] Using separate model for enhancement: ${config.model}`);
+            this.logger.info('Using separate model for enhancement', { model: config.model });
             const enhancementConfig: ResolvedConfig = {
                 ...resolvedConfig,
                 model: config.model,
@@ -133,7 +134,9 @@ ${chunk.content}
             return result;
         } catch (error) {
             // On error, fall back to simple context
-            console.warn('LLM context generation failed, using simple context:', error);
+            this.logger.warn('LLM context generation failed, using simple context', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             return this.generateSimpleContext(chunk, doc);
         }
     }

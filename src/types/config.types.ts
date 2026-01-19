@@ -81,6 +81,7 @@ export interface ContextRAGConfig {
     | 'gemini-2.0-flash-exp'
     | 'gemini-pro'
     | 'gemini-2.5-pro'
+    | 'gemini-2.5-flash'
     | 'gemini-3-pro-preview'
     | 'gemini-3-flash-preview';
     /** Embedding model (default: 'text-embedding-004') */

@@ -1,10 +1,10 @@
-import { GoogleGenerativeAI, type GenerativeModel, type Part, TaskType } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerativeModel, type Part, type Content, TaskType } from '@google/generative-ai';
 import { GoogleAIFileManager } from '@google/generative-ai/server';
 import { z } from 'zod';
 import { zodToGeminiSchema } from '../schemas/structured-output.schemas.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { TokenUsage } from '../types/chunk.types.js';
-import { RateLimitError } from '../errors/index.js';
+import { RateLimitError, GeminiAPIError, ContentPolicyError } from '../errors/index.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
 import type { Logger } from '../utils/logger.js';
 
@@ -435,8 +435,7 @@ export class GeminiService {
      * Execute structured generation with retry logic
      */
     private async executeStructuredRetry<T>(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        contents: any[],
+        contents: Content[],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         schema: z.ZodType<T, any, any>,
         options?: {
@@ -447,8 +446,7 @@ export class GeminiService {
     ): Promise<{ data: T; tokenUsage: TokenUsage }> {
         const maxRetries = options?.maxRetries ?? 2;
         let attempt = 0;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let lastError: any;
+        let lastError: Error | undefined;
 
         // Clone contents to build conversation history for feedback loop
         const currentContents = [...contents];
@@ -488,8 +486,7 @@ export class GeminiService {
                             total: usage?.totalTokenCount ?? 0,
                         }
                     };
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                } catch (e: any) {
+                } catch (e: unknown) {
                     const errorMessage = e instanceof Error ? e.message : String(e);
                     // Create a brief snippet of the invalid JSON for debugging
                     const snippet = text.length > 500 ? text.substring(0, 200) + '...[truncated]...' + text.substring(text.length - 200) : text;
@@ -521,7 +518,7 @@ export class GeminiService {
             } catch (error) {
                 this.handleError(error as Error);
 
-                lastError = error;
+                lastError = error as Error;
                 if (attempt <= maxRetries) {
                     this.logger.warn(`Gemini API error (attempt ${attempt}/${maxRetries + 1}), retrying...`, { error: (error as Error).message });
                     // For network/API errors, we DO NOT update history, just retry the request
@@ -534,7 +531,7 @@ export class GeminiService {
     }
 
     /**
-     * Handle API errors
+     * Handle API errors with specific error types
      */
     private handleError(error: Error): void {
         const message = error.message.toLowerCase();
@@ -542,6 +539,25 @@ export class GeminiService {
         if (message.includes('429') || message.includes('rate limit')) {
             this.rateLimiter.reportRateLimitError();
             throw new RateLimitError('Gemini API rate limit exceeded');
+        }
+
+        if (message.includes('quota')) {
+            throw new GeminiAPIError('API quota exceeded', {
+                statusCode: 429,
+                retryable: false,
+            });
+        }
+
+        if (message.includes('safety') || message.includes('blocked')) {
+            throw new ContentPolicyError('Content blocked by safety filters', {
+                originalError: error.message,
+            });
+        }
+
+        if (message.includes('timeout') || message.includes('network')) {
+            throw new GeminiAPIError('Network error', {
+                retryable: true,
+            });
         }
 
         this.logger.error('Gemini API error', {

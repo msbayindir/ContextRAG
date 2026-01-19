@@ -128,3 +128,48 @@ export class NotFoundError extends ContextRAGError {
         this.resourceId = resourceId;
     }
 }
+
+/**
+ * Gemini API specific errors
+ */
+export class GeminiAPIError extends ContextRAGError {
+    public readonly statusCode?: number;
+    public readonly retryable: boolean;
+
+    constructor(
+        message: string,
+        options: {
+            statusCode?: number;
+            retryable?: boolean;
+            details?: Record<string, unknown>;
+        } = {}
+    ) {
+        super(message, 'GEMINI_API_ERROR', options.details);
+        this.name = 'GeminiAPIError';
+        this.statusCode = options.statusCode;
+        this.retryable = options.retryable ?? false;
+    }
+}
+
+/**
+ * PDF processing errors
+ */
+export class PDFProcessingError extends ContextRAGError {
+    public readonly filename?: string;
+
+    constructor(message: string, filename?: string, details?: Record<string, unknown>) {
+        super(message, 'PDF_PROCESSING_ERROR', { filename, ...details });
+        this.name = 'PDFProcessingError';
+        this.filename = filename;
+    }
+}
+
+/**
+ * Content policy violation errors (non-retryable)
+ */
+export class ContentPolicyError extends ContextRAGError {
+    constructor(message: string, details?: Record<string, unknown>) {
+        super(message, 'CONTENT_POLICY_ERROR', details);
+        this.name = 'ContentPolicyError';
+    }
+}
