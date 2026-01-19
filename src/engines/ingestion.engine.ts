@@ -319,7 +319,7 @@ export class IngestionEngine {
                     // Build prompt based on whether we use structured output or legacy
                     const useStructured = this.config.useStructuredOutput;
 
-                    const getPrompt = (structured: boolean) => {
+                    const getPrompt = (structured: boolean): string => {
                         const basePrompt = buildExtractionPrompt(
                             documentInstructions,
                             exampleFormats,
@@ -457,8 +457,10 @@ export class IngestionEngine {
 
                 // Store context and create enriched content
                 if (context) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (chunk as any).contextText = context;
                     const enriched = `${context} ${chunk.searchContent}`;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (chunk as any).enrichedContent = enriched;
 
                     // [Context-RAG Update]
@@ -471,6 +473,7 @@ export class IngestionEngine {
 
             // Generate embeddings using enrichedContent if available, otherwise searchContent
             const textsToEmbed = chunks.map(c =>
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (c as any).enrichedContent ?? c.searchContent
             );
             const embeddings = await this.gemini.embedBatch(textsToEmbed);

@@ -383,6 +383,7 @@ export class GeminiService {
      */
     async generateStructured<T>(
         prompt: string,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         schema: z.ZodType<T, any, any>,
         options?: {
             temperature?: number;
@@ -407,6 +408,7 @@ export class GeminiService {
     async generateStructuredWithPdf<T>(
         pdfUri: string,
         prompt: string,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         schema: z.ZodType<T, any, any>,
         options?: {
             temperature?: number;
@@ -433,7 +435,9 @@ export class GeminiService {
      * Execute structured generation with retry logic
      */
     private async executeStructuredRetry<T>(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         contents: any[],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         schema: z.ZodType<T, any, any>,
         options?: {
             temperature?: number;
@@ -443,6 +447,7 @@ export class GeminiService {
     ): Promise<{ data: T; tokenUsage: TokenUsage }> {
         const maxRetries = options?.maxRetries ?? 2;
         let attempt = 0;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let lastError: any;
 
         // Clone contents to build conversation history for feedback loop
@@ -459,6 +464,7 @@ export class GeminiService {
                         responseMimeType: 'application/json',
                         // Cast to any because the new schema format might have slight type mismatch 
                         // but is valid for the API
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         responseSchema: zodToGeminiSchema(schema) as any,
                         temperature: options?.temperature ?? 0.2,
                         maxOutputTokens: options?.maxOutputTokens,
@@ -482,6 +488,7 @@ export class GeminiService {
                             total: usage?.totalTokenCount ?? 0,
                         }
                     };
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 } catch (e: any) {
                     const errorMessage = e instanceof Error ? e.message : String(e);
                     // Create a brief snippet of the invalid JSON for debugging
@@ -512,11 +519,7 @@ export class GeminiService {
                     throw lastError;
                 }
             } catch (error) {
-                try {
-                    this.handleError(error as Error);
-                } catch (handledError) {
-                    throw handledError; // Rate limit or fatal
-                }
+                this.handleError(error as Error);
 
                 lastError = error;
                 if (attempt <= maxRetries) {

@@ -37,6 +37,7 @@ export class AnthropicHandler implements EnhancementHandler {
 
         // If a separate model is specified for enhancement, create a new GeminiService
         if (config.model && config.model !== resolvedConfig.model) {
+            // eslint-disable-next-line no-console
             console.log(`[AnthropicHandler] Using separate model for enhancement: ${config.model}`);
             const enhancementConfig: ResolvedConfig = {
                 ...resolvedConfig,

@@ -178,6 +178,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
  * @param zodSchema - Zod schema to convert
  * @returns Gemini-compatible JSON schema
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function zodToGeminiSchema(zodSchema: z.ZodType): any {
     const jsonSchema = zodToJsonSchema(zodSchema, {
         target: 'jsonSchema7',
@@ -194,6 +195,7 @@ export function zodToGeminiSchema(zodSchema: z.ZodType): any {
 /**
  * Remove fields that Gemini API doesn't support
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function cleanSchemaForGemini(schema: any): any {
     if (typeof schema !== 'object' || schema === null) {
         return schema;
@@ -203,6 +205,7 @@ function cleanSchemaForGemini(schema: any): any {
         return schema.map(cleanSchemaForGemini);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const newObj: any = {};
     for (const [key, value] of Object.entries(schema)) {
         // Forbidden fields in Gemini responseSchema
