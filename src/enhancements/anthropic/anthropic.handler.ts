@@ -79,59 +79,49 @@ export class AnthropicHandler implements EnhancementHandler {
 
     /**
      * Simple template-based context generation (free)
+     * Uses structured metadata format for better BM25/vector performance
      */
     private generateSimpleContext(chunk: ChunkData, doc: DocumentContext): string {
-        const template = this.config.template ?? DEFAULTS.template;
-
-        return template
-            .replace('{documentType}', doc.documentType ?? 'Document')
-            .replace('{chunkType}', chunk.chunkType)
-            .replace('{page}', String(chunk.page))
-            .replace('{parentHeading}', chunk.parentHeading ?? '');
+        // Structured format: short, metadata-like, distinctive
+        return `[Source: ${doc.filename}] [Type: ${chunk.chunkType}] [Page: ${chunk.page}]${chunk.parentHeading ? ` [Section: ${chunk.parentHeading}]` : ''}`;
     }
 
     /**
-     * LLM-based context generation (best quality, ~$0.005/chunk)
+     * LLM-based structured context generation (best quality, ~$0.005/chunk)
+     * Generates short, structured metadata instead of prose
      */
     private async generateLLMContext(chunk: ChunkData, doc: DocumentContext): Promise<string> {
-        const prompt = this.config.contextPrompt ?? DEFAULTS.contextPrompt;
+        // Structured context prompt - NO prose, just metadata
+        const structuredPrompt = `Analyze this chunk and generate ONLY structured metadata.
 
-        const fullPrompt = `${prompt}
+OUTPUT FORMAT (use EXACTLY this format, nothing else):
+[Section: <main topic/chapter>]
+[Subsection: <specific area if applicable>]
+[Keywords: <3-5 key terms, comma separated>]
 
-<document_info>
-Dosya: ${doc.filename}
-Tip: ${doc.documentType ?? 'Bilinmiyor'}
-Toplam Sayfa: ${doc.pageCount}
-</document_info>
-
-${doc.fullDocumentText ? `<full_document>
-${doc.fullDocumentText.slice(0, 15000)}
-</full_document>
-
-` : ''}<chunk_to_contextualize>
-${chunk.content}
-</chunk_to_contextualize>
-
-Bu içeriğin belgenin genel akışı içindeki yerini, bağlı olduğu ana başlıkları ve ele aldığı konuyu detaylı bir şekilde özetle. İçeriğin ne olduğunu değil, bağlamını anlat:`;
-
-        try {
-            // If we have a cached PDF URI, use it for full document context (Anthropic-style)
-            if (doc.fileUri) {
-                const chunkPrompt = `Bu içeriğin belgenin genel akışı içindeki yerini, bağlı olduğu ana başlıkları ve ele aldığı konuyu detaylı bir şekilde özetle. İçeriğin ne olduğunu değil, bağlamını anlat:
+RULES:
+- Maximum 100 words total
+- NO sentences, NO explanations, NO prose
+- Turkish or English based on content language
+- If subsection not clear, omit it
 
 <chunk>
 ${chunk.content}
 </chunk>`;
-                const result = await this.gemini.generateWithPdfUri(doc.fileUri, chunkPrompt, {
-                    maxOutputTokens: 2048,
-                    temperature: 0.3
+
+        try {
+            // If we have a cached PDF URI, use it for full document context
+            if (doc.fileUri) {
+                const result = await this.gemini.generateWithPdfUri(doc.fileUri, structuredPrompt, {
+                    maxOutputTokens: 256 * 4,  // Short output
+                    temperature: 0.1       // Deterministic
                 });
-                return result.text;
+                return result.text.trim();
             }
 
-            // Otherwise, generate without full document context
-            const result = await this.gemini.generateSimple(fullPrompt);
-            return result;
+            // Fallback without PDF context
+            const result = await this.gemini.generateSimple(structuredPrompt);
+            return result.trim();
         } catch (error) {
             // On error, fall back to simple context
             this.logger.warn('LLM context generation failed, using simple context', {

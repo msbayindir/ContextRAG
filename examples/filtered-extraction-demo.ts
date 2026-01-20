@@ -71,8 +71,8 @@ async function main() {
         },
 
         batchConfig: {
-            pagesPerBatch: 30,
-            maxConcurrency: 3,
+            pagesPerBatch: 10,
+            maxConcurrency: 5,
         },
         logging: {
             level: 'info',
