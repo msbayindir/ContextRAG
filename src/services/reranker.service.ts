@@ -234,6 +234,7 @@ export class CohereReranker implements RerankerService {
         });
 
         try {
+            // eslint-disable-next-line no-undef
             const response = await fetch('https://api.cohere.ai/v1/rerank', {
                 method: 'POST',
                 headers: {
