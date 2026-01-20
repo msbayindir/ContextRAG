@@ -23,6 +23,9 @@
    ```bash
    export DATABASE_URL="postgresql://localhost/context_rag_demo"
    export GEMINI_API_KEY="your-gemini-api-key"
+   
+   # Optional: For Cohere reranking (free tier: 10K/month)
+   export COHERE_API_KEY="your-cohere-api-key"
    ```
 
 3. **Initialize Prisma Schema**
@@ -52,12 +55,27 @@
    npx tsx examples/filtered-extraction-demo.ts
    ```
 
+4. **NEW:** Run the reranking demo:
+   ```bash
+   npx tsx examples/reranking-demo.ts
+   ```
+
 ### Filtered Extraction Demo
 
 The `filtered-extraction-demo.ts` demonstrates:
 - **Custom Prompt:** Extract only TEXT, QUESTION, LIST, TABLE (skip HEADING, CODE, etc.)
 - **Selective Context:** Context enrichment only for TEXT chunks (cost optimization)
 - **Search Filtering:** Query only specific chunk types
+
+### Reranking Demo
+
+The `reranking-demo.ts` demonstrates:
+- **Gemini Reranking:** Uses existing Gemini API quota (free)
+- **Cohere Reranking:** Uses Cohere rerank-multilingual-v3.0 (10K/month free)
+- **Comparison:** Shows before/after search results with reranking
+- **Analysis:** Displays which results were promoted or demoted
+
+Reranking improves search relevance by re-scoring top candidates using AI models, reducing retrieval failure rate by ~67% according to Anthropic's research.
 
 This is useful when you want to:
 - Extract specific content types from a document

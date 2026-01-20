@@ -14,10 +14,11 @@
 |---------|-------------|
 | 🚀 **Gemini Files API** | Upload PDF once, use cached URI for entire pipeline (90%+ bandwidth savings) |
 | 🧠 **Contextual Retrieval** | Anthropic-style context generation for each chunk (improves recall by ~49%) |
+| 🎯 **Reranking** | Gemini or Cohere-powered relevance reranking (reduces retrieval failure by ~67%) |
 | 🔍 **Discovery Agent** | AI automatically analyzes documents and suggests optimal chunking strategies |
 | 📄 **Multimodal Processing** | Uses Gemini Vision API to understand tables, charts, and layouts |
 | 🧪 **Experiment System** | A/B test different models on same document for comparison |
-| 🎯 **Hybrid Search** | Semantic (vector) + Keyword (full-text) search combination |
+| 🔎 **Hybrid Search** | Semantic (vector) + Keyword (full-text) search combination |
 | 🐘 **PostgreSQL Native** | No external vector DB needed, uses pgvector |
 | ⚡ **Batch Processing** | Concurrent processing with automatic retry |
 
@@ -186,6 +187,9 @@ npx prisma migrate dev --name add-context-rag
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
 GEMINI_API_KEY="your-gemini-api-key"
+
+# Optional: Cohere API key for better reranking (free tier: 10K/month)
+COHERE_API_KEY="your-cohere-api-key"
 ```
 
 ---
@@ -275,6 +279,59 @@ const rag = new ContextRAG({
 | `llm` | ~$0.005/chunk | +49% (Gemini-generated) |
 
 ---
+
+## 🎯 Reranking
+
+Reranking improves search relevance by re-scoring candidates using AI models. Based on [Anthropic's Contextual Retrieval](https://www.anthropic.com/engineering/contextual-retrieval) research, it reduces retrieval failure rate by ~67%.
+
+### How It Works
+
+1. **Initial Retrieval:** Get top N candidates (e.g., 50) via vector similarity
+2. **Reranking:** AI model scores each candidate's relevance to the query  
+3. **Final Selection:** Return top K (e.g., 5) based on reranked scores
+
+### Configuration
+
+```typescript
+const rag = new ContextRAG({
+  prisma,
+  geminiApiKey: process.env.GEMINI_API_KEY!,
+  
+  // Reranking configuration
+  rerankingConfig: {
+    enabled: true,
+    provider: 'gemini',        // 'gemini' (free) or 'cohere' (10K/month free)
+    cohereApiKey: process.env.COHERE_API_KEY, // Required if provider is 'cohere'
+    defaultCandidates: 50,     // Get 50 candidates from vector search
+    defaultTopK: 10,           // Return top 10 after reranking
+  },
+});
+```
+
+### Per-Query Reranking
+
+```typescript
+const results = await rag.search({
+  query: 'metabolizma ve enerji üretimi',
+  limit: 5,
+  useReranking: true,          // Enable reranking for this query
+  rerankCandidates: 50,        // Get 50 candidates, rerank to top 5
+});
+
+// Results include reranking metadata
+results.forEach(r => {
+  console.log(`Score: ${r.score}`);
+  console.log(`Reranked: ${r.explanation?.reranked}`);
+  console.log(`Original rank: ${r.explanation?.originalRank}`);
+});
+```
+
+### Provider Comparison
+
+| Provider | Cost | Quality | Best For |
+|----------|------|---------|----------|
+| **Gemini** | Free (uses existing quota) | Good | Cost-sensitive, general use |
+| **Cohere** | Free tier: 10K/month | Excellent | Multilingual, production |
 
 ## 🎯 Custom Prompt / Filtered Extraction
 
