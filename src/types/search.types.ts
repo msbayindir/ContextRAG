@@ -45,6 +45,10 @@ export interface SearchOptions {
     includeExplanation?: boolean;
     /** Boost results containing specific chunk types */
     typeBoost?: Partial<Record<ChunkType, number>>;
+    /** Enable reranking for better relevance (default: false) */
+    useReranking?: boolean;
+    /** Number of candidates to retrieve before reranking (default: limit * 5) */
+    rerankCandidates?: number;
 }
 
 /**
@@ -64,6 +68,10 @@ export interface SearchExplanation {
         semantic?: number;
         keyword?: number;
     };
+    /** True if result was reranked */
+    reranked?: boolean;
+    /** Original rank before reranking */
+    originalRank?: number;
 }
 
 /**

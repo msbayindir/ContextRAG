@@ -32,6 +32,7 @@ import {
     DEFAULT_RATE_LIMIT_CONFIG,
     DEFAULT_GENERATION_CONFIG,
     DEFAULT_LOG_CONFIG,
+    DEFAULT_RERANKING_CONFIG,
 } from './types/config.types.js';
 import { ConfigurationError, NotFoundError } from './errors/index.js';
 import { createLogger, RateLimiter } from './utils/index.js';
@@ -151,6 +152,10 @@ export class ContextRAG {
             },
             ragEnhancement: userConfig.ragEnhancement,
             useStructuredOutput: userConfig.useStructuredOutput ?? true,
+            rerankingConfig: {
+                ...DEFAULT_RERANKING_CONFIG,
+                ...userConfig.rerankingConfig,
+            },
         };
     }
 

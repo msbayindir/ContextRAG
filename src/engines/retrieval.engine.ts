@@ -5,8 +5,10 @@ import type {
     SearchResponse,
     SearchFilters,
 } from '../types/search.types.js';
+import type { RerankingConfig } from '../types/config.types.js';
 import { ChunkRepository } from '../database/repositories/chunk.repository.js';
 import { GeminiService } from '../services/gemini.service.js';
+import { createReranker, type RerankerService } from '../services/reranker.service.js';
 import type { Logger } from '../utils/logger.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
 import { SearchModeEnum } from '../types/enums.js';
@@ -18,6 +20,8 @@ export class RetrievalEngine {
     private readonly chunkRepo: ChunkRepository;
     private readonly gemini: GeminiService;
     private readonly logger: Logger;
+    private readonly reranker: RerankerService;
+    private readonly rerankingConfig: RerankingConfig;
 
     constructor(
         config: ResolvedConfig,
@@ -27,6 +31,8 @@ export class RetrievalEngine {
         this.chunkRepo = new ChunkRepository(config.prisma);
         this.gemini = new GeminiService(config, rateLimiter, logger);
         this.logger = logger;
+        this.rerankingConfig = config.rerankingConfig;
+        this.reranker = createReranker(config, this.gemini, logger);
     }
 
     /**
@@ -67,6 +73,29 @@ export class RetrievalEngine {
             default:
                 results = await this.hybridSearch(options.query, limit, filters, options.minScore);
                 break;
+        }
+
+        // Apply reranking if enabled
+        const shouldRerank = options.useReranking ?? this.rerankingConfig.enabled;
+        if (shouldRerank && results.length > 1) {
+            const candidates = options.rerankCandidates ?? this.rerankingConfig.defaultCandidates;
+            // Get more candidates for reranking if needed
+            if (results.length < candidates) {
+                // Re-fetch with more results for reranking
+                switch (mode) {
+                    case SearchModeEnum.SEMANTIC:
+                        results = await this.semanticSearch(options.query, candidates, filters, options.minScore);
+                        break;
+                    case SearchModeEnum.KEYWORD:
+                        results = await this.keywordSearch(options.query, candidates, filters);
+                        break;
+                    case SearchModeEnum.HYBRID:
+                    default:
+                        results = await this.hybridSearch(options.query, candidates, filters, options.minScore);
+                        break;
+                }
+            }
+            results = await this.applyReranking(options.query, results, limit);
         }
 
         // Apply type boosting if specified
@@ -224,5 +253,45 @@ export class RetrievalEngine {
                 };
             })
             .sort((a, b) => b.score - a.score);
+    }
+
+    /**
+     * Apply reranking to search results using configured reranker
+     */
+    private async applyReranking(
+        query: string,
+        results: SearchResult[],
+        topK: number
+    ): Promise<SearchResult[]> {
+        this.logger.debug('Applying reranking', {
+            candidateCount: results.length,
+            topK,
+        });
+
+        const rerankDocs = results.map((r, i) => ({
+            id: r.chunk.id,
+            content: r.chunk.displayContent,
+            originalRank: i,
+            originalScore: r.score,
+        }));
+
+        const reranked = await this.reranker.rerank(query, rerankDocs, topK);
+
+        return reranked.map(r => {
+            const original = results.find(res => res.chunk.id === r.id)!;
+            return {
+                chunk: original.chunk,
+                score: r.relevanceScore,
+                explanation: {
+                    matchType: original.explanation?.matchType ?? 'both',
+                    matchedTerms: original.explanation?.matchedTerms,
+                    intentBoost: original.explanation?.intentBoost,
+                    boostReason: original.explanation?.boostReason,
+                    rawScores: original.explanation?.rawScores,
+                    reranked: true,
+                    originalRank: r.originalRank,
+                },
+            };
+        });
     }
 }

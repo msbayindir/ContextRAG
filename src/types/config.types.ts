@@ -57,6 +57,22 @@ export interface LogConfig {
 }
 
 /**
+ * Reranking configuration
+ */
+export interface RerankingConfig {
+    /** Enable reranking by default (default: false) */
+    enabled: boolean;
+    /** Reranker provider: 'gemini' | 'cohere' */
+    provider: 'gemini' | 'cohere';
+    /** Cohere API key (required if provider is 'cohere') */
+    cohereApiKey?: string;
+    /** Default number of candidates to retrieve before reranking */
+    defaultCandidates: number;
+    /** Default top K to return after reranking */
+    defaultTopK: number;
+}
+
+/**
  * Generation configuration for Gemini API
  */
 export interface GenerationConfig {
@@ -100,6 +116,8 @@ export interface ContextRAGConfig {
     ragEnhancement?: RagEnhancementConfig;
     /** Enable structured output (JSON schema) for better reliability (default: true) */
     useStructuredOutput?: boolean;
+    /** Reranking configuration */
+    rerankingConfig?: Partial<RerankingConfig>;
 }
 
 /**
@@ -117,6 +135,7 @@ export interface ResolvedConfig {
     logging: LogConfig;
     ragEnhancement?: RagEnhancementConfig;
     useStructuredOutput: boolean;
+    rerankingConfig: RerankingConfig;
 }
 
 /**
@@ -150,6 +169,13 @@ export const DEFAULT_LOG_CONFIG: LogConfig = {
     structured: true,
 };
 
+export const DEFAULT_RERANKING_CONFIG: RerankingConfig = {
+    enabled: false,
+    provider: 'gemini',
+    defaultCandidates: 50,
+    defaultTopK: 10,
+};
+
 /**
  * Zod schema for config validation
  */
@@ -161,6 +187,7 @@ export const configSchema = z.object({
         'gemini-2.0-flash-exp',
         'gemini-pro',
         'gemini-2.5-pro',
+        'gemini-2.5-flash',
         'gemini-3-pro-preview',
         'gemini-3-flash-preview'
     ]).optional(),

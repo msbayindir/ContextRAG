@@ -259,6 +259,35 @@ export class GeminiService {
     }
 
     /**
+     * Generate text for reranking tasks
+     * Higher token limit for scoring multiple documents
+     */
+    async generateForReranking(prompt: string): Promise<string> {
+        await this.rateLimiter.acquire();
+
+        try {
+            const result = await this.model.generateContent({
+                contents: [
+                    {
+                        role: 'user',
+                        parts: [{ text: prompt }],
+                    },
+                ],
+                generationConfig: {
+                    temperature: 0.1,  // More deterministic
+                    maxOutputTokens: 2048,  // Enough for scoring ~50 docs
+                },
+            });
+
+            this.rateLimiter.reportSuccess();
+            return result.response.text().trim();
+        } catch (error) {
+            this.handleError(error as Error);
+            throw error;
+        }
+    }
+
+    /**
      * Generate content with file reference (for contextual retrieval)
      * Uses Gemini's file caching for efficiency
      */
