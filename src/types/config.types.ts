@@ -73,6 +73,13 @@ export interface RerankingConfig {
 }
 
 /**
+ * Chunk type mapping for custom extraction types
+ * Maps custom types (from user prompts) to system types
+ * Example: { 'RECIPE': 'TEXT', 'INGREDIENT': 'LIST' }
+ */
+export type ChunkTypeMapping = Record<string, 'TEXT' | 'TABLE' | 'LIST' | 'HEADING' | 'CODE' | 'QUOTE' | 'IMAGE_REF' | 'QUESTION' | 'MIXED'>;
+
+/**
  * Generation configuration for Gemini API
  */
 export interface GenerationConfig {
@@ -118,6 +125,13 @@ export interface ContextRAGConfig {
     useStructuredOutput?: boolean;
     /** Reranking configuration */
     rerankingConfig?: Partial<RerankingConfig>;
+    /**
+     * Custom chunk type mapping
+     * Maps custom types (e.g., 'RECIPE') to system types (e.g., 'TEXT')
+     * Original type is preserved in chunk metadata.originalType
+     * @example { 'RECIPE': 'TEXT', 'INGREDIENT': 'LIST', 'NUTRITION': 'TABLE' }
+     */
+    chunkTypeMapping?: ChunkTypeMapping;
 }
 
 /**
@@ -136,6 +150,8 @@ export interface ResolvedConfig {
     ragEnhancement?: RagEnhancementConfig;
     useStructuredOutput: boolean;
     rerankingConfig: RerankingConfig;
+    /** Custom chunk type mapping (optional) */
+    chunkTypeMapping?: ChunkTypeMapping;
 }
 
 /**

@@ -8,6 +8,7 @@ import type {
     BatchResult,
 } from '../types/ingestion.types.js';
 import type { CreateChunkInput, TokenUsage } from '../types/chunk.types.js';
+import type { ChunkTypeEnumType } from '../types/enums.js';
 import { BatchStatusEnum, DocumentStatusEnum } from '../types/enums.js';
 import { DocumentRepository } from '../database/repositories/document.repository.js';
 import { BatchRepository } from '../database/repositories/batch.repository.js';
@@ -69,6 +70,40 @@ export class IngestionEngine {
             config,
             this.gemini
         );
+    }
+
+    /**
+     * Apply chunk type mapping if configured
+     * Returns the mapped system type and original type for metadata
+     */
+    private applyChunkTypeMapping(rawType: string): {
+        chunkType: ChunkTypeEnumType;
+        originalType?: string;
+    } {
+        const mapping = this.config.chunkTypeMapping;
+
+        // If no mapping configured, return as-is
+        if (!mapping) {
+            return { chunkType: rawType as ChunkTypeEnumType };
+        }
+
+        // Check if this type has a mapping
+        const upperType = rawType.toUpperCase();
+        const mappedType = mapping[upperType] || mapping[rawType];
+
+        if (mappedType) {
+            this.logger.debug('Applied chunk type mapping', {
+                originalType: rawType,
+                mappedType: mappedType,
+            });
+            return {
+                chunkType: mappedType as ChunkTypeEnumType,
+                originalType: rawType,
+            };
+        }
+
+        // No mapping found, return as-is
+        return { chunkType: rawType as ChunkTypeEnumType };
     }
 
     /**
@@ -463,28 +498,34 @@ export class IngestionEngine {
                 // Handle Structured Output
                 const sections = result.data as SectionArray;
 
-                chunks = sections.map((section, index) => ({
-                    promptConfigId,
-                    documentId,
-                    chunkIndex: index,
-                    chunkType: section.type,
-                    searchContent: cleanForSearch(section.content),
-                    displayContent: section.content,
-                    sourcePageStart: section.page,
-                    sourcePageEnd: section.page,
-                    confidenceScore: section.confidence,
-                    metadata: {
-                        type: section.type,
-                        pageRange: { start: section.page, end: section.page },
-                        confidence: {
-                            score: section.confidence,
-                            category: section.confidence >= 0.8 ? 'HIGH' :
-                                section.confidence >= 0.5 ? 'MEDIUM' : 'LOW'
+                chunks = sections.map((section, index) => {
+                    // Apply type mapping if configured
+                    const { chunkType, originalType } = this.applyChunkTypeMapping(section.type);
+
+                    return {
+                        promptConfigId,
+                        documentId,
+                        chunkIndex: index,
+                        chunkType: chunkType,
+                        searchContent: cleanForSearch(section.content),
+                        displayContent: section.content,
+                        sourcePageStart: section.page,
+                        sourcePageEnd: section.page,
+                        confidenceScore: section.confidence,
+                        metadata: {
+                            type: chunkType,
+                            pageRange: { start: section.page, end: section.page },
+                            confidence: {
+                                score: section.confidence,
+                                category: section.confidence >= 0.8 ? 'HIGH' :
+                                    section.confidence >= 0.5 ? 'MEDIUM' : 'LOW'
+                            },
+                            parsedWithStructuredMarkers: true,
+                            parsingMethod: 'gemini_response_schema',
+                            originalType: originalType,  // Preserve original type
                         },
-                        parsedWithStructuredMarkers: true,
-                        parsingMethod: 'gemini_response_schema'
-                    },
-                }));
+                    };
+                });
             } else {
                 // Handle Legacy Text Response
                 const textResponse = result as { text: string };

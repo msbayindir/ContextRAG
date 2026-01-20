@@ -156,6 +156,7 @@ export class ContextRAG {
                 ...DEFAULT_RERANKING_CONFIG,
                 ...userConfig.rerankingConfig,
             },
+            chunkTypeMapping: userConfig.chunkTypeMapping,
         };
     }
 
