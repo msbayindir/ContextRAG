@@ -16,15 +16,7 @@ export interface Logger {
     error(message: string, meta?: LogMeta): void;
 }
 
-/**
- * Pino log level mapping
- */
-const PINO_LEVELS: Record<string, string> = {
-    debug: 'debug',
-    info: 'info',
-    warn: 'warn',
-    error: 'error',
-};
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
  * Creates a high-performance Pino logger instance
@@ -64,7 +56,7 @@ export function createLogger(config: LogConfig): Logger {
     /**
      * Log with optional custom logger fallback
      */
-    const log = (level: keyof typeof PINO_LEVELS, message: string, meta?: LogMeta): void => {
+    const log = (level: LogLevel, message: string, meta?: LogMeta): void => {
         const enrichedMeta = enrichMeta(meta);
 
         // Support custom logger if configured
@@ -74,7 +66,7 @@ export function createLogger(config: LogConfig): Logger {
         }
 
         // Use Pino's native logging
-        pinoLogger[level as 'debug' | 'info' | 'warn' | 'error'](enrichedMeta, message);
+        pinoLogger[level](enrichedMeta, message);
     };
 
     return {
