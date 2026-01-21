@@ -8,6 +8,9 @@
 import type { EmbeddingProvider, EmbeddingProviderConfig } from '../types/embedding-provider.types.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import { GeminiEmbeddingProvider } from './gemini-embedding.provider.js';
+import { OpenAIEmbeddingProvider } from './openai-embedding.provider.js';
+import { CohereEmbeddingProvider } from './cohere-embedding.provider.js';
+import { env } from '../config/env.js';
 import type { RateLimiter } from '../utils/rate-limiter.js';
 import type { Logger } from '../utils/logger.js';
 import { ConfigurationError } from '../errors/index.js';
@@ -41,19 +44,40 @@ export function createEmbeddingProvider(
                 logger
             );
 
-        case 'openai':
-            // Phase 3: OpenAI support
-            throw new ConfigurationError(
-                'OpenAI embedding provider not yet implemented. Coming in Phase 3.',
-                { provider: 'openai' }
+        case 'openai': {
+            const openaiApiKey = providerConfig?.apiKey ?? env.OPENAI_API_KEY;
+            if (!openaiApiKey) {
+                throw new ConfigurationError(
+                    'OpenAI API key is required for openai provider',
+                    { provider: 'openai' }
+                );
+            }
+            return new OpenAIEmbeddingProvider(
+                {
+                    apiKey: openaiApiKey,
+                    model: providerConfig?.model,
+                },
+                rateLimiter,
+                logger
             );
+        }
 
-        case 'cohere':
-            // Phase 3: Cohere support
-            throw new ConfigurationError(
-                'Cohere embedding provider not yet implemented. Coming in Phase 3.',
-                { provider: 'cohere' }
+        case 'cohere': {
+            const cohereApiKey = providerConfig?.apiKey ?? env.COHERE_API_KEY;
+            if (!cohereApiKey) {
+                throw new ConfigurationError(
+                    'Cohere API key is required for cohere provider',
+                    { provider: 'cohere' }
+                );
+            }
+            return new CohereEmbeddingProvider(
+                {
+                    apiKey: cohereApiKey,
+                    model: providerConfig?.model,
+                },
+                logger
             );
+        }
 
         default:
             throw new ConfigurationError(

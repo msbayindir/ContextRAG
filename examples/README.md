@@ -38,6 +38,10 @@
    npx prisma migrate dev --name init
    ```
 
+## Documentation
+
+- **[Advanced Configuration & Scenarios](./ADVANCED_CONFIGURATION.md)**: Comprehensive guide on using different embedding providers (Gemini, OpenAI, Cohere), managing migrations, and setting up reranking.
+
 ## Running the Demo
 
 1. Add a test PDF file:

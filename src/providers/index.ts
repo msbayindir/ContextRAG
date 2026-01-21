@@ -6,6 +6,8 @@
 
 // Embedding providers
 export { GeminiEmbeddingProvider } from './gemini-embedding.provider.js';
+export { OpenAIEmbeddingProvider } from './openai-embedding.provider.js';
+export { CohereEmbeddingProvider } from './cohere-embedding.provider.js';
 export { createEmbeddingProvider, getEmbeddingDimension } from './embedding-provider.factory.js';
 
 // Re-export types for convenience

@@ -27,13 +27,22 @@ const envSchema = z.object({
         .describe('Log level: debug, info, warn, error'),
 
     /**
-     * Cohere API key for reranking (optional)
+     * Cohere API key for reranking and embeddings (optional)
      * Get yours at: https://dashboard.cohere.com/api-keys
      */
     COHERE_API_KEY: z
         .string()
         .optional()
-        .describe('Cohere API key for reranking'),
+        .describe('Cohere API key for reranking and embeddings'),
+
+    /**
+     * OpenAI API key for embeddings (optional)
+     * Get yours at: https://platform.openai.com/api-keys
+     */
+    OPENAI_API_KEY: z
+        .string()
+        .optional()
+        .describe('OpenAI API key for embeddings'),
 });
 
 /**
