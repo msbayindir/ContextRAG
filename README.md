@@ -21,6 +21,235 @@
 | 🔎 **Hybrid Search** | Semantic (vector) + Keyword (full-text) search combination |
 | 🐘 **PostgreSQL Native** | No external vector DB needed, uses pgvector |
 | ⚡ **Batch Processing** | Concurrent processing with automatic retry |
+| 🛡️ **Enterprise Error Handling** | Correlation IDs, graceful degradation, structured logging |
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TB
+    subgraph Input
+        PDF[📄 PDF Document]
+    end
+
+    subgraph Discovery["🔍 Discovery Phase"]
+        DA[Discovery Agent]
+        DA --> |Analyzes| PS[Prompt Strategy]
+        DA --> |Suggests| CS[Chunk Types]
+    end
+
+    subgraph Ingestion["📥 Ingestion Pipeline"]
+        GF[Gemini Files API]
+        BP[Batch Processor]
+        SE[Structured Extraction]
+        CR[Contextual Retrieval]
+        VE[Vector Embedding]
+    end
+
+    subgraph Storage["🗄️ PostgreSQL"]
+        PG[(pgvector)]
+        FT[Full-Text Index]
+    end
+
+    subgraph Retrieval["🔎 Search & Retrieval"]
+        HS[Hybrid Search]
+        RR[Reranker]
+        RR --> |Gemini or Cohere| RS[Ranked Results]
+    end
+
+    PDF --> DA
+    PS --> GF
+    GF --> |Cached URI| BP
+    BP --> SE
+    SE --> CR
+    CR --> |"Adds Context"| VE
+    VE --> PG
+    VE --> FT
+    
+    Query[🔍 Query] --> HS
+    HS --> PG
+    HS --> FT
+    PG & FT --> RR
+    RS --> Response[📋 Contextual Results]
+```
+
+---
+
+## 🤔 Why Contextual Retrieval?
+
+> **Problem:** Traditional RAG systems lose context when chunking documents. A chunk saying *"The inhibitor blocks Complex IV"* is meaningless without knowing it's from the *"Electron Transport Chain"* section.
+
+### The Anthropic Research
+
+[Anthropic's Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) paper showed that adding context to each chunk dramatically improves retrieval quality:
+
+| Method | Retrieval Failure Rate | Improvement |
+|--------|------------------------|-------------|
+| Traditional RAG | 5.7% | - |
+| + BM25 Hybrid | 4.5% | +21% |
+| + Contextual Retrieval | 2.9% | **+49%** |
+| + Contextual + Reranking | 1.9% | **+67%** |
+
+### How Context-RAG Implements This
+
+```typescript
+// Before: Raw chunk (loses context)
+{
+  content: "The inhibitor blocks Complex IV",
+  // Where is this from? What document? What section?
+}
+
+// After: Contextual chunk (Context-RAG)
+{
+  content: "The inhibitor blocks Complex IV",
+  contextText: "This chunk is from 'Biochemistry 101', Chapter 5: Electron Transport Chain. It describes how cyanide inhibits cytochrome c oxidase (Complex IV), stopping ATP synthesis.",
+  enrichedContent: "[CONTEXT] ... [CONTENT] The inhibitor blocks Complex IV"
+}
+```
+
+---
+
+## 📋 Real-World Use Cases
+
+### 🏥 1. Medical Education (TUS/USMLE Prep)
+
+**Scenario:** Turkish medical students preparing for TUS exam with 500+ page biochemistry PDFs.
+
+```typescript
+const rag = new ContextRAG({
+  prisma,
+  geminiApiKey: process.env.GEMINI_API_KEY,
+  ragEnhancement: {
+    approach: 'anthropic_contextual',  // Enable contextual retrieval
+    strategy: 'llm',
+    model: 'gemini-2.5-flash',
+  },
+});
+
+// Discovery: AI analyzes the PDF and suggests extraction strategy
+const discovery = await rag.discover({ file: pdfBuffer, filename: 'biochemistry.pdf' });
+
+// Ingest with discovered strategy
+await rag.ingest({
+  file: pdfBuffer,
+  filename: 'biochemistry.pdf',
+  promptConfig: discovery.promptConfig,  // AI-suggested prompts
+});
+
+// Students can now ask contextual questions
+const results = await rag.search({
+  query: 'Siyanür hangi kompleksi inhibe eder?',
+  mode: 'hybrid',
+  useReranking: true,
+});
+// Returns: "Complex IV (Cytochrome c oxidase)" with full chapter context
+```
+
+### ⚖️ 2. Legal Document Analysis
+
+**Scenario:** Law firms processing contracts, regulations, and case law.
+
+```typescript
+// Custom extraction for legal documents
+await rag.ingest({
+  file: contractPdf,
+  filename: 'service-agreement.pdf',
+  customPrompt: `
+    Extract the following from this legal document:
+    - CLAUSE: Individual contract clauses with section numbers
+    - DEFINITION: Defined terms and their meanings  
+    - OBLIGATION: Parties' obligations and deadlines
+    - LIABILITY: Liability limitations and indemnifications
+  `,
+});
+
+// Search with type filtering
+const liabilityClauses = await rag.search({
+  query: 'limitation of liability for indirect damages',
+  filters: { chunkTypes: ['LIABILITY', 'CLAUSE'] },
+  useReranking: true,
+});
+```
+
+### 🏢 3. Enterprise Knowledge Base
+
+**Scenario:** Company onboarding with internal policies, procedures, and technical docs.
+
+```typescript
+// Process multiple document types
+for (const doc of ['hr-policy.pdf', 'security-guidelines.pdf', 'api-docs.pdf']) {
+  const discovery = await rag.discover({ file: docs[doc], filename: doc });
+  await rag.ingest({
+    file: docs[doc],
+    filename: doc,
+    promptConfig: discovery.promptConfig,
+    experimentId: 'knowledge-base-v1',  // Group related documents
+  });
+}
+
+// Employees search across all documents
+const results = await rag.search({
+  query: 'What is the vacation policy for remote employees?',
+  mode: 'hybrid',
+});
+```
+
+---
+
+## 🛡️ Enterprise Error Handling
+
+Context-RAG implements production-grade error handling with full traceability:
+
+### Correlation IDs
+
+Every operation is tracked with a unique correlation ID for debugging:
+
+```typescript
+import { generateCorrelationId, setCorrelationId } from '@msbayindir/context-rag';
+
+// Set correlation ID for request tracing
+const correlationId = generateCorrelationId();  // crag_1737470109_abc123
+setCorrelationId(correlationId);
+
+// All logs and errors now include this ID
+// [2026-01-21T18:00:00.000Z] [INFO] Starting ingestion {"correlationId":"crag_1737470109_abc123"}
+```
+
+### Custom Error Classes
+
+```typescript
+import { 
+  IngestionError, 
+  RerankingError, 
+  ConfigurationError,
+  RateLimitError 
+} from '@msbayindir/context-rag';
+
+try {
+  await rag.ingest({ file: pdfBuffer, filename: 'doc.pdf' });
+} catch (error) {
+  if (error instanceof RateLimitError) {
+    console.log(`Rate limited. Retry after ${error.retryAfterMs}ms`);
+    console.log(`Correlation ID: ${error.correlationId}`);
+  } else if (error instanceof IngestionError) {
+    console.log(`Ingestion failed at batch ${error.batchIndex}`);
+    console.log(`Retryable: ${error.retryable}`);
+  }
+}
+```
+
+### Health Check
+
+```typescript
+const health = await rag.healthCheck();
+// {
+//   status: 'healthy',
+//   database: true,
+//   pgvector: true,
+//   reranking: { enabled: true, provider: 'gemini', configured: true }
+// }
+```
 
 ---
 
