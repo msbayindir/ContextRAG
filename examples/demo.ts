@@ -23,59 +23,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 
 // Sample biochemistry text for testing (TUS exam questions)
-const SAMPLE_BIOCHEMISTRY_TEXT = `
-BİYOKİMYA'DA ÇIKMIŞ TUS SORU SPOTLARI -1
-
-METABOLİZMANIN TEMEL KAVRAMLARI
-
-1. METABOLİZMAYA GİRİŞ
-
-Biyokimyasal öneme sahip molekülerden açığa çıkan ΔG0:
-
-| Bileşik | ΔG0 kcal/mol |
-|---------|--------------|
-| Fosfoenol pirüvat | -14.8 |
-| Karbamoil fosfat | -12.3 |
-| 1,3-Bifosfogliserat → 3-Fosfogliserat | -11.8 |
-| Kreatin fosfat | -10.3 |
-| ATP → ADP + Pi | -7.3 |
-| ADP → AMP + Pi | -6.6 |
-| Glukoz-6-fosfat | -3.3 |
-
-**Soru 1:** Diğerlerine göre en yüksek negatif değere sahip olan yüksek enerjili bileşik hangisidir?
-A) ATP
-B) Kreatin fosfat
-C) Fosfoenol pirüvat
-D) Glukoz-6-fosfat
-E) ADP
-**Cevap:** C) Fosfoenol pirüvat
-
-**Soru 2:** ADP'den ATP sentezlemeye yetmeyen bileşik hangisidir?
-A) Fosfoenol pirüvat
-B) Kreatin fosfat
-C) 1,3-Bifosfogliserat
-D) Gliserol-3-fosfat
-E) Karbamoil fosfat
-**Cevap:** D) Gliserol-3-fosfat
-
-2. ELEKTRON TRANSPORT ZİNCİRİ
-
-Elektron Transport Zinciri Kompleksleri:
-
-| Kompleks | Enzim | Prostetik Grup |
-|----------|-------|----------------|
-| I | NADH dehidrojenaz | FMN, Fe-S |
-| II | Süksinat dehidrojenaz | FAD, Fe-S |
-| III | Ubikinon-sitokrom C oksidoredüktaz | Hem, Fe-S |
-| IV | Sitokrom oksidaz | Hem, bakır |
-| V | ATP sentez | - |
-
-ETZ İnhibitörleri:
-- Rotenon, Amobarbital → Kompleks I inhibisyonu
-- TTFA, Karboksin, Malonat → Kompleks II inhibisyonu
-- Antimisin A → Kompleks III inhibisyonu
-- Siyanür, Karbonmonoksit → Kompleks IV inhibisyonu
-`;
+// Sample biochemistry text removed as it was unused
 
 // Check environment variables
 if (!process.env.GEMINI_API_KEY) {
@@ -118,9 +66,11 @@ async function main() {
     // Initialize Context-RAG
     console.log('\n🔧 Initializing Context-RAG...');
     const rag = new ContextRAG({
-        prisma,
+        // Cast generated PrismaClient to minimal interface
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        prisma: prisma as any,
         geminiApiKey: process.env.GEMINI_API_KEY!,
-        model: 'gemini-3-pro-preview',  // Main model for PDF extraction (best quality)
+        model: 'gemini-3-flash-preview',  // Use stable model instead of "gemini-3-pro-preview"
         generationConfig: {
             temperature: 0.2, // Lower temperature for accurate extraction
             maxOutputTokens: 8192 * 2 * 4,

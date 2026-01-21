@@ -149,10 +149,8 @@ export class ContextRAG {
             logging: {
                 ...DEFAULT_LOG_CONFIG,
                 ...userConfig.logging,
-                // Support LOG_LEVEL environment variable
-                level: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error')
-                    || userConfig.logging?.level
-                    || DEFAULT_LOG_CONFIG.level,
+                // LOG_LEVEL can be set via userConfig.logging.level
+                level: userConfig.logging?.level || DEFAULT_LOG_CONFIG.level,
             },
             ragEnhancement: userConfig.ragEnhancement,
             useStructuredOutput: userConfig.useStructuredOutput ?? true,

@@ -7,11 +7,31 @@
 // Main class
 export { ContextRAG } from './context-rag.js';
 
-// Types
 export type {
     ContextRAGConfig,
     ContextRAGOptions,
+    // Config subtypes
+    BatchConfig,
+    ChunkConfig,
+    RateLimitConfig,
+    RerankingConfig,
+    GenerationConfig,
+    LogConfig,
+    ResolvedConfig,
 } from './types/config.types.js';
+
+// RAG Enhancement types
+export type {
+    RagEnhancementConfig,
+    AnthropicContextualConfig,
+    CustomEnhancementConfig,
+    NoEnhancementConfig,
+    RagApproach,
+    AnthropicStrategy,
+    ChunkData,
+    DocumentContext,
+    EnhancementHandler,
+} from './types/rag-enhancement.types.js';
 
 export type {
     ChunkType,
@@ -25,11 +45,14 @@ export type {
     SearchResult,
     SearchMode,
     SearchFilters,
+    SearchResponse,
+    SearchMetadata,
 } from './types/search.types.js';
 
 export type {
     DiscoveryResult,
     DiscoveryOptions,
+    ApproveStrategyOptions,
 } from './types/discovery.types.js';
 
 export type {
@@ -37,6 +60,8 @@ export type {
     IngestResult,
     BatchStatus,
     DocumentStatus,
+    BatchResult,
+    ProgressCallback,
 } from './types/ingestion.types.js';
 
 export type {

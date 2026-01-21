@@ -73,10 +73,22 @@ export class DiscoveryEngine {
                 prompt,
                 DiscoveryResponseSchema
             );
-            // Ensure detectedElements has default value
+            // Start with mapping
+            const detectedElements = response.data.detectedElements?.map(el => ({
+                type: el.type,
+                count: el.count ?? 0,
+                examples: el.examples
+            })) ?? [];
+
+            const exampleFormats = response.data.exampleFormats?.map(ef => ({
+                element: ef.element,
+                format: ef.format
+            }));
+
             analysisResult = {
                 ...response.data,
-                detectedElements: response.data.detectedElements ?? [],
+                detectedElements,
+                exampleFormats,
             };
 
             this.logger.debug('Structured discovery response received', {
@@ -126,9 +138,17 @@ export class DiscoveryEngine {
             id: correlationId,
             documentType: analysisResult.documentType,
             documentTypeName: analysisResult.documentTypeName,
-            detectedElements: analysisResult.detectedElements ?? [],
+            // Map strictly to ensure type safety
+            detectedElements: analysisResult.detectedElements?.map(el => ({
+                type: el.type,
+                count: el.count ?? 0,
+                examples: el.examples
+            })) ?? [],
             specialInstructions: analysisResult.specialInstructions,
-            exampleFormats: analysisResult.exampleFormats,
+            exampleFormats: analysisResult.exampleFormats?.map(ef => ({
+                element: ef.element,
+                format: ef.format
+            })),
             suggestedChunkStrategy: {
                 ...DEFAULT_CHUNK_STRATEGY,
                 ...analysisResult.chunkStrategy,

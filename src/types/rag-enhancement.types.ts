@@ -134,5 +134,5 @@ export const DEFAULT_ANTHROPIC_CONFIG = {
     concurrencyLimit: 5,
     enableCache: true,
     template: '[{documentType}] [{chunkType}] Page {page}',
-    contextPrompt: 'Bu parçayı belgede konumlandır. Parçanın ne hakkında olduğunu ve belgede nerede bulunduğunu 1-2 cümle ile Türkçe açıkla:',
+    contextPrompt: 'Situate this chunk within the document. Briefly explain what this chunk is about and where it appears in the document in 1-2 sentences:',
 } as const;

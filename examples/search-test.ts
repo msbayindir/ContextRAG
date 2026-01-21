@@ -37,7 +37,8 @@ async function main() {
     }
 
     const rag = new ContextRAG({
-        prisma,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        prisma: prisma as any,
         geminiApiKey: process.env.GEMINI_API_KEY!,
         model: 'gemini-3-flash-preview',
         // Enable reranking for better results

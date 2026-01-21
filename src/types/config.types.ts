@@ -2,11 +2,61 @@ import { z } from 'zod';
 import type { RagEnhancementConfig } from './rag-enhancement.types.js';
 
 /**
- * Generic Prisma client type - allows any Prisma client instance
- * This avoids requiring the user to generate Prisma client before using the library
+ * Minimal interface for Prisma client operations used by Context-RAG.
+ * This allows using any Prisma client instance that provides the required models.
+ * 
+ * Users should pass their generated PrismaClient instance which will
+ * satisfy this interface if the Context-RAG models are properly defined.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type PrismaClientLike = any;
+export interface PrismaClientLike {
+    /** ContextRagPromptConfig model operations */
+    contextRagPromptConfig: PrismaModelOperations;
+    /** ContextRagChunk model operations */
+    contextRagChunk: PrismaModelOperations;
+    /** ContextRagDocument model operations */
+    contextRagDocument: PrismaModelOperations;
+    /** ContextRagBatch model operations */
+    contextRagBatch: PrismaModelOperations;
+    /** Execute raw SQL query */
+    $executeRaw: (query: unknown, ...values: unknown[]) => Promise<number>;
+    /** Execute raw SQL query and return results */
+    $queryRaw: <T = unknown>(query: unknown, ...values: unknown[]) => Promise<T>;
+    /** Execute raw SQL query (unsafe - for dynamic queries) */
+    $executeRawUnsafe: (query: string, ...values: unknown[]) => Promise<number>;
+    /** Query raw SQL (unsafe - for dynamic queries) */
+    $queryRawUnsafe: <T = unknown>(query: string, ...values: unknown[]) => Promise<T>;
+    /** Transaction support */
+    $transaction: <T>(fn: (tx: PrismaClientLike) => Promise<T>) => Promise<T>;
+}
+
+/**
+ * Generic Prisma model operations interface.
+ * Simplified to avoid complex generic constraints while maintaining type safety.
+ */
+export interface PrismaModelOperations {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    create: (args: any) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    createMany: (args: any) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findUnique: (args: any) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findFirst: (args: any) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    findMany: (args?: any) => Promise<any[]>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    update: (args: any) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateMany: (args: any) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete: (args: any) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    deleteMany: (args: any) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    count: (args?: any) => Promise<number>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    aggregate: (args: any) => Promise<any>;
+}
 
 /**
  * Batch processing configuration

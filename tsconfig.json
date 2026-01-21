@@ -7,7 +7,7 @@
             "ES2022"
         ],
         "outDir": "./dist",
-        "rootDir": "./src",
+        "rootDir": "./",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
@@ -25,7 +25,8 @@
         "noUncheckedIndexedAccess": true
     },
     "include": [
-        "src/**/*"
+        "src/**/*",
+        "examples/**/*"
     ],
     "exclude": [
         "node_modules",

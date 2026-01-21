@@ -246,10 +246,12 @@ program
             console.log('❌ prisma/schema.prisma not found\n');
         }
 
-        // Check env
+        // Check env - note: these are checked at runtime, not via centralized env
+        // since CLI may run before env is fully configured
         console.log('Environment:');
         console.log(`  ${process.env['DATABASE_URL'] ? '✅' : '❌'} DATABASE_URL`);
         console.log(`  ${process.env['GEMINI_API_KEY'] ? '✅' : '❌'} GEMINI_API_KEY`);
+        console.log(`  ${process.env['COHERE_API_KEY'] ? '✅' : '⚪'} COHERE_API_KEY (optional)`);
         console.log();
     });
 

@@ -18,7 +18,8 @@ async function main() {
     console.log(`\n🔧 Reranker Provider: ${rerankerProvider.toUpperCase()}`);
 
     const rag = new ContextRAG({
-        prisma,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        prisma: prisma as any,
         geminiApiKey: process.env.GEMINI_API_KEY!,
         model: 'gemini-2.5-flash',
         rerankingConfig: {

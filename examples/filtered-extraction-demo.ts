@@ -50,7 +50,8 @@ async function main() {
     // Initialize Context-RAG with filtered configuration
     console.log('\n🔧 Initializing Context-RAG with filters...');
     const rag = new ContextRAG({
-        prisma,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        prisma: prisma as any,
         geminiApiKey: process.env.GEMINI_API_KEY!,
         model: 'gemini-3-pro-preview',
         generationConfig: {
