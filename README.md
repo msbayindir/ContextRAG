@@ -1,10 +1,58 @@
 # 🧠 Context-RAG
 
-**A powerful, multimodal RAG engine with Anthropic-style Contextual Retrieval, Gemini Files API integration, and PostgreSQL-native vector search.**
+> **Context-RAG is not another RAG wrapper.**  
+> It's a document-understanding engine designed for real-world knowledge systems.
 
-[![npm version](https://badge.fury.io/js/context-rag.svg)](https://www.npmjs.com/package/context-rag)
+[![npm version](https://badge.fury.io/js/@msbayindir/context-rag.svg)](https://www.npmjs.com/package/@msbayindir/context-rag)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![Status](https://img.shields.io/badge/Status-Beta-orange.svg)]()
+
+> ⚠️ **Status: Beta** — Actively used in production (medical RAG & enterprise docs), API stable, breaking changes documented.
+
+---
+
+## ⚡ 60-Second Quick Start
+
+```typescript
+import { ContextRAG } from '@msbayindir/context-rag';
+import { PrismaClient } from '@prisma/client';
+import * as fs from 'fs';
+
+const rag = new ContextRAG({
+  prisma: new PrismaClient(),
+  geminiApiKey: process.env.GEMINI_API_KEY!,
+});
+
+// Ingest a PDF
+await rag.ingest({
+  file: fs.readFileSync('./document.pdf'),
+  filename: 'document.pdf',
+});
+
+// Search with context
+const results = await rag.search({
+  query: 'What are the key findings?',
+  mode: 'hybrid',
+  useReranking: true,
+});
+
+console.log(results[0].chunk.displayContent);
+```
+
+> 📌 **Requires:** PostgreSQL + [pgvector](https://github.com/pgvector/pgvector) extension
+
+---
+
+## 🎯 Who is this for?
+
+| You should use Context-RAG if you... |
+|--------------------------------------|
+| 🏗️ Are building **production RAG systems** (not prototypes) |
+| 📄 Process **large PDFs** — medical, legal, enterprise docs |
+| 🐘 Want **PostgreSQL-only** stack (no Pinecone, no Weaviate, no vendor lock-in) |
+| 😤 Are frustrated with **context loss** in traditional chunking |
+| 🔬 Need **experiment tracking** to compare different extraction strategies |
 
 ---
 
@@ -119,7 +167,7 @@ flowchart TB
 ```typescript
 const rag = new ContextRAG({
   prisma,
-  geminiApiKey: process.env.GEMINI_API_KEY,
+  geminiApiKey: process.env.GEMINI_API_KEY!,
   ragEnhancement: {
     approach: 'anthropic_contextual',  // Enable contextual retrieval
     strategy: 'llm',
@@ -256,11 +304,11 @@ const health = await rag.healthCheck();
 ## 📦 Installation
 
 ```bash
-npm install context-rag
+npm install @msbayindir/context-rag
 # or
-pnpm add context-rag
+pnpm add @msbayindir/context-rag
 # or
-yarn add context-rag
+yarn add @msbayindir/context-rag
 ```
 
 ---
@@ -303,7 +351,18 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 ### 2. Prisma Schema Setup
 
-Add Context-RAG models to your `prisma/schema.prisma`:
+Context-RAG requires 4 models in your Prisma schema. Use our CLI to auto-add them:
+
+```bash
+# Automatically adds Context-RAG models to your schema
+npx @msbayindir/context-rag init
+
+# Then run migrations
+npx prisma migrate dev --name add-context-rag
+```
+
+<details>
+<summary>📋 Manual Setup (click to expand)</summary>
 
 ```prisma
 // Required: pgvector extension
@@ -318,98 +377,12 @@ datasource db {
   extensions = [vector]
 }
 
-// Context-RAG Models (copy these to your schema)
-model ContextRagPromptConfig {
-  id              String   @id @default(uuid())
-  documentType    String   @map("document_type")
-  name            String
-  systemPrompt    String   @map("system_prompt") @db.Text
-  userPromptTemplate String? @map("user_prompt_template") @db.Text
-  chunkStrategy   Json     @map("chunk_strategy")
-  version         Int      @default(1)
-  isDefault       Boolean  @default(false) @map("is_default")
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  chunks          ContextRagChunk[]
-  @@unique([documentType, version])
-  @@map("context_rag_prompt_configs")
-}
-
-model ContextRagChunk {
-  id              String   @id @default(uuid())
-  promptConfigId  String   @map("prompt_config_id")
-  promptConfig    ContextRagPromptConfig @relation(fields: [promptConfigId], references: [id], onDelete: Cascade)
-  documentId      String   @map("document_id")
-  chunkIndex      Int      @map("chunk_index")
-  chunkType       String   @map("chunk_type")
-  searchContent   String   @map("search_content") @db.Text
-  enrichedContent String?  @map("enriched_content") @db.Text  // Context + searchContent
-  contextText     String?  @map("context_text") @db.Text      // Generated context only
-  searchVector    Unsupported("vector(768)") @map("search_vector")
-  displayContent  String   @map("display_content") @db.Text
-  sourcePageStart Int      @map("source_page_start")
-  sourcePageEnd   Int      @map("source_page_end")
-  confidenceScore Float    @map("confidence_score")
-  metadata        Json?
-  createdAt       DateTime @default(now()) @map("created_at")
-  @@index([documentId])
-  @@index([chunkType])
-  @@map("context_rag_chunks")
-}
-
-model ContextRagDocument {
-  id           String   @id @default(uuid())
-  filename     String
-  fileHash     String   @map("file_hash")
-  fileSize     Int      @map("file_size")
-  pageCount    Int      @map("page_count")
-  documentType String?  @map("document_type")
-  promptConfigId String? @map("prompt_config_id")
-  experimentId String?  @map("experiment_id")
-  modelName    String?  @map("model_name")
-  modelConfig  Json?    @map("model_config")
-  status       String   @default("PENDING")
-  completedBatches Int  @default(0) @map("completed_batches")
-  failedBatches Int     @default(0) @map("failed_batches")
-  totalBatches Int      @default(0) @map("total_batches")
-  tokenUsageInput Int?  @map("token_usage_input")
-  tokenUsageOutput Int? @map("token_usage_output")
-  tokenUsageTotal Int?  @map("token_usage_total")
-  processingMs Int?     @map("processing_ms")
-  error        String?  @db.Text
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  batches      ContextRagBatch[]
-  @@unique([fileHash, experimentId])
-  @@map("context_rag_documents")
-}
-
-model ContextRagBatch {
-  id           String   @id @default(uuid())
-  documentId   String   @map("document_id")
-  document     ContextRagDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  batchIndex   Int      @map("batch_index")
-  pageStart    Int      @map("page_start")
-  pageEnd      Int      @map("page_end")
-  status       String   @default("PENDING")
-  tokenUsageInput Int?  @map("token_usage_input")
-  tokenUsageOutput Int? @map("token_usage_output")
-  tokenUsageTotal Int?  @map("token_usage_total")
-  processingMs Int?     @map("processing_ms")
-  error        String?  @db.Text
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  @@unique([documentId, batchIndex])
-  @@map("context_rag_batches")
-}
+// 4 models: ContextRagPromptConfig, ContextRagChunk, ContextRagDocument, ContextRagBatch
+// Full schema: https://github.com/msbayindir/ContextRAG/blob/main/prisma/schema.prisma
 ```
 
-Then run migrations:
+</details>
 
-```bash
-npx prisma migrate dev --name add-context-rag
-```
 
 ### 3. Environment Variables
 
@@ -423,10 +396,10 @@ COHERE_API_KEY="your-cohere-api-key"
 
 ---
 
-## 🚀 Quick Start
+## 🧩 Usage (Full Example)
 
 ```typescript
-import { ContextRAG } from 'context-rag';
+import { ContextRAG } from '@msbayindir/context-rag';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -509,7 +482,8 @@ const rag = new ContextRAG({
 
 ---
 
-## 🎯 Reranking
+<details>
+<summary>🎯 Reranking (Advanced)</summary>
 
 Reranking improves search relevance by re-scoring candidates using AI models. Based on [Anthropic's Contextual Retrieval](https://www.anthropic.com/engineering/contextual-retrieval) research, it reduces retrieval failure rate by ~67%.
 
@@ -562,7 +536,10 @@ results.forEach(r => {
 | **Gemini** | Free (uses existing quota) | Good | Cost-sensitive, general use |
 | **Cohere** | Free tier: 10K/month | Excellent | Multilingual, production |
 
-## 🎯 Custom Prompt / Filtered Extraction
+</details>
+
+<details>
+<summary>🎯 Custom Prompt / Filtered Extraction (Advanced)</summary>
 
 Extract only specific content types without going through the Discovery flow:
 
@@ -609,6 +586,8 @@ await rag.ingest({
 ```
 
 > **Note:** When using `customPrompt` without `promptConfigId`, the system automatically creates a PromptConfig for you.
+
+</details>
 
 ---
 
