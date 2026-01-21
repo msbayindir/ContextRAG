@@ -77,16 +77,19 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@faker-js/faker": "^10.2.0",
     "@types/node": "^22.10.7",
     "@types/pdf-parse": "^1.1.4",
     "@typescript-eslint/eslint-plugin": "^8.21.0",
     "@typescript-eslint/parser": "^8.21.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^9.18.0",
     "prettier": "^3.4.2",
     "prisma": "^6.2.1",
     "tsup": "^8.3.5",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "vitest-mock-extended": "^3.1.0"
   },
   "peerDependencies": {
     "@prisma/client": ">=5.0.0"
