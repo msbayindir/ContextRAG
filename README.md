@@ -3,7 +3,7 @@
 > **Context-RAG is not another RAG wrapper.**  
 > It's a document-understanding engine designed for real-world knowledge systems.
 
-[![npm version](https://badge.fury.io/js/@msbayindir/context-rag.svg)](https://www.npmjs.com/package/@msbayindir/context-rag)
+[![npm version](https://img.shields.io/npm/v/@msbayindir/context-rag.svg)](https://www.npmjs.com/package/@msbayindir/context-rag)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Status](https://img.shields.io/badge/Status-Beta-orange.svg)]()
