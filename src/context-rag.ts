@@ -34,7 +34,7 @@ import {
     DEFAULT_LOG_CONFIG,
     DEFAULT_RERANKING_CONFIG,
 } from './types/config.types.js';
-import { ConfigurationError, NotFoundError } from './errors/index.js';
+import { ConfigurationError, NotFoundError, IngestionError } from './errors/index.js';
 import { createLogger, RateLimiter } from './utils/index.js';
 import type { Logger } from './utils/logger.js';
 import {
@@ -299,8 +299,12 @@ export class ContextRAG {
         const doc = await this.documentRepo.getById(documentId);
 
         // For now, throw an error - full implementation would require storing the file
-        throw new Error(
-            `Retry not yet fully implemented. Document ${doc.id} has ${doc.progress.failedBatches} failed batches.`
+        throw new IngestionError(
+            `Retry not yet fully implemented. Document ${doc.id} has ${doc.progress.failedBatches} failed batches.`,
+            {
+                retryable: false,
+                details: { documentId: doc.id, failedBatches: doc.progress.failedBatches },
+            }
         );
     }
 
@@ -358,12 +362,17 @@ export class ContextRAG {
     }
 
     /**
-     * Health check
+     * Health check - verifies system components are operational
      */
     async healthCheck(): Promise<{
         status: 'healthy' | 'degraded' | 'unhealthy';
         database: boolean;
         pgvector: boolean;
+        reranking: {
+            enabled: boolean;
+            provider: string;
+            configured: boolean;
+        };
     }> {
         const database = await checkDatabaseConnection(this.config.prisma);
         let pgvector = false;
@@ -376,6 +385,16 @@ export class ContextRAG {
             }
         }
 
+        // Check reranking configuration
+        const rerankingConfig = this.config.rerankingConfig;
+        const reranking = {
+            enabled: rerankingConfig.enabled,
+            provider: rerankingConfig.provider,
+            configured: rerankingConfig.provider === 'cohere'
+                ? !!rerankingConfig.cohereApiKey
+                : true, // Gemini uses existing API key
+        };
+
         let status: 'healthy' | 'degraded' | 'unhealthy';
         if (database && pgvector) {
             status = 'healthy';
@@ -385,6 +404,6 @@ export class ContextRAG {
             status = 'unhealthy';
         }
 
-        return { status, database, pgvector };
+        return { status, database, pgvector, reranking };
     }
 }

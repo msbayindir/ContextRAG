@@ -1,4 +1,5 @@
 import type { LogConfig } from '../types/config.types.js';
+import { getCorrelationId } from '../errors/index.js';
 
 export interface LogMeta {
     correlationId?: string;
@@ -23,6 +24,7 @@ const LOG_LEVELS = {
 
 /**
  * Creates a logger instance based on configuration
+ * Automatically injects correlation ID into all log entries
  */
 export function createLogger(config: LogConfig): Logger {
     const currentLevel = LOG_LEVELS[config.level];
@@ -36,15 +38,21 @@ export function createLogger(config: LogConfig): Logger {
         message: string,
         meta?: LogMeta
     ): string => {
+        // Auto-inject correlation ID if not provided
+        const enrichedMeta = {
+            correlationId: meta?.correlationId ?? getCorrelationId(),
+            ...meta,
+        };
+
         if (config.structured) {
             return JSON.stringify({
                 timestamp: new Date().toISOString(),
                 level,
                 message,
-                ...meta,
+                ...enrichedMeta,
             });
         }
-        const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+        const metaStr = enrichedMeta ? ` ${JSON.stringify(enrichedMeta)}` : '';
         return `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}${metaStr}`;
     };
 
@@ -52,7 +60,12 @@ export function createLogger(config: LogConfig): Logger {
         if (!shouldLog(level)) return;
 
         if (config.customLogger) {
-            config.customLogger(level, message, meta);
+            // Inject correlation ID for custom loggers too
+            const enrichedMeta = {
+                correlationId: meta?.correlationId ?? getCorrelationId(),
+                ...meta,
+            };
+            config.customLogger(level, message, enrichedMeta);
             return;
         }
 
@@ -79,11 +92,4 @@ export function createLogger(config: LogConfig): Logger {
         warn: (message: string, meta?: LogMeta) => log('warn', message, meta),
         error: (message: string, meta?: LogMeta) => log('error', message, meta),
     };
-}
-
-/**
- * Generate a unique correlation ID for tracking operations
- */
-export function generateCorrelationId(): string {
-    return `crag_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }

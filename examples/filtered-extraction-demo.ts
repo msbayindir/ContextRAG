@@ -12,7 +12,7 @@
  *   npx tsx examples/filtered-extraction-demo.ts
  */
 
-import { ContextRAG } from '../src/index.js';
+import { ContextRAG, IngestionError, SearchError, ContextRAGError } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -88,6 +88,7 @@ async function main() {
         process.exit(1);
     }
     console.log('✅ System healthy');
+    console.log(`   Reranking: ${health.reranking.enabled ? '✅ ' + health.reranking.provider : '❌ disabled'}`);
 
     // Load test PDF
     const testPdfPath = path.join(process.cwd(), 'examples', 'test.pdf');
@@ -215,7 +216,23 @@ Bu belgeden SADECE aşağıdaki içerik tiplerini çıkar:
         }
 
     } catch (error) {
-        console.error('❌ Error:', (error as Error).message);
+        // Enterprise error handling
+        if (error instanceof IngestionError) {
+            console.error(`❌ Ingestion Error [${error.code}]: ${error.message}`);
+            console.error(`   Correlation ID: ${error.correlationId}`);
+            console.error(`   Retryable: ${error.retryable}`);
+            if (error.batchIndex !== undefined) {
+                console.error(`   Failed Batch: ${error.batchIndex}`);
+            }
+        } else if (error instanceof SearchError) {
+            console.error(`❌ Search Error: ${error.message}`);
+            console.error(`   Correlation ID: ${error.correlationId}`);
+        } else if (error instanceof ContextRAGError) {
+            console.error(`❌ Error [${error.code}]: ${error.message}`);
+            console.error(`   Correlation ID: ${error.correlationId}`);
+        } else {
+            console.error('❌ Unexpected error:', (error as Error).message);
+        }
     }
 
     console.log('\n✨ Demo complete!');

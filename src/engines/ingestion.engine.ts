@@ -7,6 +7,7 @@ import type {
     BatchStatus,
     BatchResult,
 } from '../types/ingestion.types.js';
+import type { ProcessingWarning } from '../errors/index.js';
 import type { CreateChunkInput, TokenUsage } from '../types/chunk.types.js';
 import type { ChunkTypeEnumType } from '../types/enums.js';
 import { BatchStatusEnum, DocumentStatusEnum } from '../types/enums.js';
@@ -107,6 +108,39 @@ export class IngestionEngine {
     }
 
     /**
+     * Collect processing warnings from batch results
+     */
+    private collectWarnings(batchResults: BatchResult[], failedCount: number): ProcessingWarning[] | undefined {
+        const warnings: ProcessingWarning[] = [];
+
+        // Add warning for failed batches
+        if (failedCount > 0) {
+            warnings.push({
+                type: 'PARSE_ERROR',
+                message: `${failedCount} batch(es) failed to process`,
+                details: {
+                    failedBatches: batchResults.filter(b => b.error).map(b => ({
+                        batch: b.batchIndex,
+                        error: b.error,
+                    })),
+                },
+            });
+        }
+
+        // Check for low confidence batches
+        const lowConfidenceBatches = batchResults.filter(b => b.chunksCreated === 0 && !b.error);
+        if (lowConfidenceBatches.length > 0) {
+            warnings.push({
+                type: 'LOW_CONFIDENCE',
+                message: `${lowConfidenceBatches.length} batch(es) produced no chunks`,
+                details: { batches: lowConfidenceBatches.map(b => b.batchIndex) },
+            });
+        }
+
+        return warnings.length > 0 ? warnings : undefined;
+    }
+
+    /**
      * Ingest a document
      */
     async ingest(options: IngestOptions): Promise<IngestResult> {
@@ -142,7 +176,10 @@ export class IngestionEngine {
                     tokenUsage: existing.tokenUsage ?? { input: 0, output: 0, total: 0 },
                     processingMs: 0,
                     batches: [],
-                    warnings: ['Document already exists for this experiment, skipped processing'],
+                    warnings: [{
+                        type: 'FALLBACK_USED',
+                        message: 'Document already exists for this experiment, skipped processing',
+                    }],
                 };
             }
         }
@@ -335,7 +372,7 @@ export class IngestionEngine {
             tokenUsage: totalTokenUsage,
             processingMs,
             batches: batchResults,
-            warnings: failedCount > 0 ? [`${failedCount} batch(es) failed to process`] : undefined,
+            warnings: this.collectWarnings(batchResults, failedCount),
         };
     }
 

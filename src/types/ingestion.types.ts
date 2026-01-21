@@ -1,5 +1,6 @@
 import type { BatchStatusEnumType, DocumentStatusEnumType } from './enums.js';
 import type { TokenUsage } from './chunk.types.js';
+import type { ProcessingWarning } from '../errors/index.js';
 
 /**
  * Batch status during ingestion
@@ -85,8 +86,8 @@ export interface IngestResult {
     processingMs: number;
     /** Per-batch results */
     batches: BatchResult[];
-    /** Warning messages (e.g., partial failures) */
-    warnings?: string[];
+    /** Processing warnings (non-fatal issues like fallbacks used) */
+    warnings?: ProcessingWarning[];
 }
 
 /**

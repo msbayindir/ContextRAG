@@ -257,6 +257,7 @@ export class RetrievalEngine {
 
     /**
      * Apply reranking to search results using configured reranker
+     * Gracefully degrades to original order if reranking fails
      */
     private async applyReranking(
         query: string,
@@ -268,30 +269,53 @@ export class RetrievalEngine {
             topK,
         });
 
-        const rerankDocs = results.map((r, i) => ({
-            id: r.chunk.id,
-            content: r.chunk.displayContent,
-            originalRank: i,
-            originalScore: r.score,
-        }));
+        try {
+            const rerankDocs = results.map((r, i) => ({
+                id: r.chunk.id,
+                content: r.chunk.displayContent,
+                originalRank: i,
+                originalScore: r.score,
+            }));
 
-        const reranked = await this.reranker.rerank(query, rerankDocs, topK);
+            const reranked = await this.reranker.rerank(query, rerankDocs, topK);
 
-        return reranked.map(r => {
-            const original = results.find(res => res.chunk.id === r.id)!;
-            return {
-                chunk: original.chunk,
-                score: r.relevanceScore,
+            return reranked.map(r => {
+                const original = results.find(res => res.chunk.id === r.id)!;
+                return {
+                    chunk: original.chunk,
+                    score: r.relevanceScore,
+                    explanation: {
+                        matchType: original.explanation?.matchType ?? 'both',
+                        matchedTerms: original.explanation?.matchedTerms,
+                        intentBoost: original.explanation?.intentBoost,
+                        boostReason: original.explanation?.boostReason,
+                        rawScores: original.explanation?.rawScores,
+                        reranked: true,
+                        originalRank: r.originalRank,
+                    },
+                };
+            });
+        } catch (error) {
+            // Graceful degradation: return original results if reranking fails
+            this.logger.warn('Reranking failed, falling back to original order', {
+                error: (error as Error).message,
+                candidateCount: results.length,
+            });
+
+            // Return top K results in original order with degradation marker
+            return results.slice(0, topK).map((r, index) => ({
+                chunk: r.chunk,
+                score: r.score,
                 explanation: {
-                    matchType: original.explanation?.matchType ?? 'both',
-                    matchedTerms: original.explanation?.matchedTerms,
-                    intentBoost: original.explanation?.intentBoost,
-                    boostReason: original.explanation?.boostReason,
-                    rawScores: original.explanation?.rawScores,
-                    reranked: true,
-                    originalRank: r.originalRank,
+                    matchType: r.explanation?.matchType ?? 'both',
+                    matchedTerms: r.explanation?.matchedTerms,
+                    intentBoost: r.explanation?.intentBoost,
+                    boostReason: r.explanation?.boostReason,
+                    rawScores: r.explanation?.rawScores,
+                    reranked: false,
+                    originalRank: index,
                 },
-            };
-        });
+            }));
+        }
     }
 }

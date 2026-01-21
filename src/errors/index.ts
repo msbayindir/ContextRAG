@@ -1,15 +1,67 @@
 /**
+ * Error context for correlation and tracing
+ */
+export interface ErrorContext {
+    /** Unique correlation ID for request tracing */
+    correlationId?: string;
+    /** Timestamp when error occurred */
+    timestamp?: Date;
+    /** Original cause of the error */
+    cause?: Error;
+    /** Operation that was being performed */
+    operation?: string;
+}
+
+/**
+ * Generate a unique correlation ID
+ */
+export function generateCorrelationId(): string {
+    return `crag_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+}
+
+/**
+ * Get current correlation ID from async context or generate new one
+ */
+let currentCorrelationId: string | undefined;
+
+export function setCorrelationId(id: string): void {
+    currentCorrelationId = id;
+}
+
+export function getCorrelationId(): string {
+    return currentCorrelationId ?? generateCorrelationId();
+}
+
+export function clearCorrelationId(): void {
+    currentCorrelationId = undefined;
+}
+
+/**
  * Base error class for Context-RAG
+ * All errors extend this class for consistent handling
  */
 export class ContextRAGError extends Error {
     public readonly code: string;
     public readonly details?: Record<string, unknown>;
+    public readonly correlationId: string;
+    public readonly timestamp: Date;
+    public readonly cause?: Error;
+    public readonly operation?: string;
 
-    constructor(message: string, code: string, details?: Record<string, unknown>) {
+    constructor(
+        message: string,
+        code: string,
+        details?: Record<string, unknown>,
+        context?: ErrorContext
+    ) {
         super(message);
         this.name = 'ContextRAGError';
         this.code = code;
         this.details = details;
+        this.correlationId = context?.correlationId ?? getCorrelationId();
+        this.timestamp = context?.timestamp ?? new Date();
+        this.cause = context?.cause;
+        this.operation = context?.operation;
         Error.captureStackTrace(this, this.constructor);
     }
 
@@ -19,8 +71,40 @@ export class ContextRAGError extends Error {
             code: this.code,
             message: this.message,
             details: this.details,
+            correlationId: this.correlationId,
+            timestamp: this.timestamp.toISOString(),
+            operation: this.operation,
+            cause: this.cause ? {
+                name: this.cause.name,
+                message: this.cause.message,
+            } : undefined,
         };
     }
+}
+
+/**
+ * Wrap an unknown error into a ContextRAGError
+ */
+export function wrapError(
+    error: unknown,
+    ErrorClass: new (message: string, details?: Record<string, unknown>) => ContextRAGError,
+    operation?: string
+): ContextRAGError {
+    if (error instanceof ContextRAGError) {
+        return error;
+    }
+
+    const originalError = error instanceof Error ? error : new Error(String(error));
+    const wrapped = new ErrorClass(originalError.message, {
+        originalError: originalError.name,
+        stack: originalError.stack,
+    });
+
+    // Copy over correlation context
+    Object.defineProperty(wrapped, 'cause', { value: originalError });
+    Object.defineProperty(wrapped, 'operation', { value: operation });
+
+    return wrapped;
 }
 
 /**
@@ -173,3 +257,40 @@ export class ContentPolicyError extends ContextRAGError {
         this.name = 'ContentPolicyError';
     }
 }
+
+/**
+ * Reranking-related errors
+ */
+export class RerankingError extends ContextRAGError {
+    public readonly provider: 'gemini' | 'cohere' | 'none';
+    public readonly retryable: boolean;
+
+    constructor(
+        message: string,
+        provider: 'gemini' | 'cohere' | 'none',
+        options: {
+            retryable?: boolean;
+            details?: Record<string, unknown>;
+        } = {}
+    ) {
+        super(message, 'RERANKING_ERROR', { provider, ...options.details });
+        this.name = 'RerankingError';
+        this.provider = provider;
+        this.retryable = options.retryable ?? true;
+    }
+}
+
+/**
+ * Processing warning (non-fatal issue during processing)
+ */
+export interface ProcessingWarning {
+    /** Warning type */
+    type: 'FALLBACK_USED' | 'LOW_CONFIDENCE' | 'PARSE_ERROR' | 'RERANKING_FAILED' | 'CONTEXT_SKIPPED';
+    /** Related batch index if applicable */
+    batch?: number;
+    /** Warning message */
+    message: string;
+    /** Additional details */
+    details?: Record<string, unknown>;
+}
+

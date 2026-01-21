@@ -8,6 +8,7 @@
 import type { GeminiService } from './gemini.service.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { Logger } from '../utils/logger.js';
+import { RerankingError } from '../errors/index.js';
 import { z } from 'zod';
 
 /**
@@ -140,7 +141,10 @@ JSON RESPONSE:`;
                             originalObjects: objectMatches.length,
                         });
                     } else {
-                        throw new Error('No JSON array found in response');
+                        throw new RerankingError('No valid JSON found in Gemini response', 'gemini', {
+                            retryable: true,
+                            details: { responsePreview: response.substring(0, 200) },
+                        });
                     }
                 } else {
                     const parseResult = GeminiRerankResponseSchema.parse(JSON.parse(jsonMatch[0]));
@@ -251,7 +255,13 @@ export class CohereReranker implements RerankerService {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Cohere API error: ${response.status} - ${errorText}`);
+                throw new RerankingError(`Cohere API error: ${response.status}`, 'cohere', {
+                    retryable: response.status >= 500,
+                    details: {
+                        statusCode: response.status,
+                        errorText: errorText.substring(0, 500),
+                    },
+                });
             }
 
             const data = await response.json() as {

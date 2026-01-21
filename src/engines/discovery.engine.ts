@@ -7,7 +7,7 @@ import { GeminiService } from '../services/gemini.service.js';
 import { PDFProcessor } from '../services/pdf.processor.js';
 import type { Logger } from '../utils/logger.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
-import { generateCorrelationId } from '../utils/index.js';
+import { generateCorrelationId } from '../errors/index.js';
 import { DEFAULT_CHUNK_STRATEGY } from '../types/prompt.types.js';
 import { buildDiscoveryPrompt } from '../config/templates.js';
 import { DiscoveryResponseSchema, type DiscoveryResponse } from '../schemas/index.js';

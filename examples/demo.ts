@@ -17,7 +17,7 @@
  *   npx tsx examples/demo.ts
  */
 
-import { ContextRAG } from '../src/index.js';
+import { ContextRAG, ConfigurationError, IngestionError, RerankingError } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -148,6 +148,8 @@ async function main() {
     console.log(`   Status: ${health.status}`);
     console.log(`   Database: ${health.database ? '✅' : '❌'}`);
     console.log(`   pgvector: ${health.pgvector ? '✅' : '❌'}`);
+    console.log(`   Reranking: ${health.reranking.enabled ? '✅ ' + health.reranking.provider : '❌ disabled'}`);
+    console.log(`   Reranker Configured: ${health.reranking.configured ? '✅' : '⚠️ API key missing'}`);
 
     if (health.status === 'unhealthy') {
         console.error('❌ System is unhealthy, exiting...');
@@ -353,7 +355,19 @@ async function main() {
             }
 
         } catch (error) {
-            console.error('   ❌ Error:', (error as Error).message);
+            // Enterprise error handling demo
+            if (error instanceof IngestionError) {
+                console.error(`   ❌ Ingestion Error [${error.code}]:`, error.message);
+                console.error(`      Correlation ID: ${error.correlationId}`);
+                console.error(`      Retryable: ${error.retryable}`);
+            } else if (error instanceof RerankingError) {
+                console.error(`   ❌ Reranking Error [${error.provider}]:`, error.message);
+                console.error(`      Correlation ID: ${error.correlationId}`);
+            } else if (error instanceof ConfigurationError) {
+                console.error(`   ❌ Config Error:`, error.message);
+            } else {
+                console.error('   ❌ Error:', (error as Error).message);
+            }
         }
     }
 

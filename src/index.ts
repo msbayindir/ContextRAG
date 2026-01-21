@@ -54,4 +54,21 @@ export {
     IngestionError,
     SearchError,
     DiscoveryError,
+    RerankingError,
+    DatabaseError,
+    RateLimitError,
+    NotFoundError,
+    GeminiAPIError,
+    PDFProcessingError,
+    ContentPolicyError,
+    ValidationError,
+    // Utilities
+    generateCorrelationId,
+    setCorrelationId,
+    getCorrelationId,
+    clearCorrelationId,
+    wrapError,
 } from './errors/index.js';
+
+export type { ProcessingWarning, ErrorContext } from './errors/index.js';
+

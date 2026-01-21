@@ -12,6 +12,7 @@ import type {
 } from '../types/rag-enhancement.types.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { GeminiService } from '../services/gemini.service.js';
+import { ConfigurationError } from '../errors/index.js';
 import { NoOpHandler } from './no-op.handler.js';
 import { AnthropicHandler } from './anthropic/anthropic.handler.js';
 
@@ -34,13 +35,17 @@ export function createEnhancementHandler(
 
         case 'google_grounding':
             // Future implementation
-            throw new Error('Google Grounding is not yet implemented');
+            throw new ConfigurationError('Google Grounding is not yet implemented', {
+                approach: 'google_grounding',
+            });
 
         case 'custom':
             return new CustomHandler(config.handler, config.skipChunkTypes);
 
         default:
-            throw new Error(`Unknown RAG enhancement approach: ${(config as RagEnhancementConfig).approach}`);
+            throw new ConfigurationError(`Unknown RAG enhancement approach`, {
+                approach: (config as RagEnhancementConfig).approach,
+            });
     }
 }
 

@@ -1,4 +1,4 @@
-export { createLogger, generateCorrelationId } from './logger.js';
+export { createLogger } from './logger.js';
 export type { Logger, LogMeta } from './logger.js';
 
 export { hashBuffer, hashFile, shortHash } from './hash.js';
