@@ -255,4 +255,57 @@ program
         console.log();
     });
 
+program
+    .command('check-embeddings')
+    .description('Check for embedding model mismatch between config and database')
+    .action(async () => {
+        console.log('🔍 Checking embedding model status...\n');
+
+        try {
+            // Dynamic import to verify module exists (void to suppress unused warning)
+            void (await import('../utils/embedding-utils.js'));
+
+            // We can't fully check without a configured client, so just show stats
+            console.log('⚠️  Full mismatch detection requires database connection.');
+            console.log('   Use this command programmatically with your Prisma client.\n');
+            console.log('Example:');
+            console.log('  import { detectEmbeddingMismatch } from "@msbayindir/context-rag";');
+            console.log('  const mismatch = await detectEmbeddingMismatch(prisma, provider);');
+            console.log();
+        } catch (error) {
+            console.error('❌ Error:', (error as Error).message);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('reindex')
+    .description('Re-index all chunks with current embedding model')
+    .option('-c, --concurrency <number>', 'Number of concurrent embedding calls', '5')
+    .option('-b, --batch-size <number>', 'Batch size for processing', '50')
+    .option('-d, --document-id <id>', 'Re-index specific document only')
+    .action(async (options) => {
+        console.log('🔄 Starting re-indexing operation...\n');
+
+        console.log('Options:');
+        console.log(`  Concurrency: ${options.concurrency}`);
+        console.log(`  Batch size: ${options.batchSize}`);
+        if (options.documentId) {
+            console.log(`  Document ID: ${options.documentId}`);
+        }
+        console.log();
+
+        console.log('⚠️  Re-indexing requires database connection and embedding provider.');
+        console.log('   Use this command programmatically:\n');
+        console.log('Example:');
+        console.log('  import { MigrationService } from "@msbayindir/context-rag";');
+        console.log('  const migrationService = new MigrationService(prisma, provider, config, logger);');
+        console.log('  const result = await migrationService.reindex({');
+        console.log(`    concurrency: ${options.concurrency},`);
+        console.log(`    batchSize: ${options.batchSize},`);
+        console.log('    onProgress: (p) => console.log(`${p.processed}/${p.total}`)');
+        console.log('  });');
+        console.log();
+    });
+
 program.parse();

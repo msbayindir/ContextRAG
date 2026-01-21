@@ -105,12 +105,20 @@ model ContextRagChunk {
   /// { page, pageRange, type, confidence, tokens, keywords, ... }
   metadata Json
 
+  /// Embedding model used to create this vector
+  /// e.g., "gemini-text-embedding-004", "openai-text-embedding-3-large"
+  embeddingModel String? @map("embedding_model")
+
+  /// Vector dimension (for validation and migration tracking)
+  embeddingDimension Int? @map("embedding_dimension")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([promptConfigId])
   @@index([documentId])
   @@index([chunkType])
   @@index([confidenceScore])
+  @@index([embeddingModel])
   @@map("context_rag_chunks")
 }
 
