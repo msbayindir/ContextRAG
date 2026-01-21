@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { RateLimiter } from '../src/utils/rate-limiter.js';
 import { sleep, isRetryableError } from '../src/utils/retry.js';
 import { hashBuffer, shortHash } from '../src/utils/hash.js';
-import { createLogger, generateCorrelationId } from '../src/utils/logger.js';
+import { createLogger } from '../src/utils/logger.js';
 import { createEventEmitter } from '../src/utils/events.js';
-import { RateLimitError } from '../src/errors/index.js';
+import { RateLimitError, generateCorrelationId } from '../src/errors/index.js';
 
 describe('Utilities', () => {
     describe('RateLimiter', () => {

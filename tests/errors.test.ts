@@ -9,6 +9,12 @@ import {
     RateLimitError,
     ValidationError,
     NotFoundError,
+    RerankingError,
+    generateCorrelationId,
+    setCorrelationId,
+    getCorrelationId,
+    clearCorrelationId,
+    wrapError,
 } from '../src/errors/index.js';
 
 describe('Error Classes', () => {
@@ -29,13 +35,30 @@ describe('Error Classes', () => {
             expect(error.details).toEqual({ key: 'value' });
         });
 
-        it('should serialize to JSON', () => {
+        it('should include correlationId', () => {
+            const error = new ContextRAGError('Test error', 'TEST');
+            expect(error.correlationId).toBeDefined();
+            expect(error.correlationId).toMatch(/^crag_/);
+        });
+
+        it('should include timestamp', () => {
+            const before = new Date();
+            const error = new ContextRAGError('Test error', 'TEST');
+            const after = new Date();
+            expect(error.timestamp).toBeInstanceOf(Date);
+            expect(error.timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
+            expect(error.timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
+        });
+
+        it('should serialize to JSON with correlationId and timestamp', () => {
             const error = new ContextRAGError('Test error', 'TEST', { key: 'value' });
             const json = error.toJSON();
             expect(json.name).toBe('ContextRAGError');
             expect(json.code).toBe('TEST');
             expect(json.message).toBe('Test error');
             expect(json.details).toEqual({ key: 'value' });
+            expect(json.correlationId).toBeDefined();
+            expect(json.timestamp).toBeDefined();
         });
     });
 
@@ -133,4 +156,74 @@ describe('Error Classes', () => {
             expect(error.resourceId).toBe('abc');
         });
     });
+
+    describe('RerankingError', () => {
+        it('should have correct name and code', () => {
+            const error = new RerankingError('Reranking failed', 'cohere');
+            expect(error.name).toBe('RerankingError');
+            expect(error.code).toBe('RERANKING_ERROR');
+        });
+
+        it('should store provider', () => {
+            const error = new RerankingError('Failed', 'gemini');
+            expect(error.provider).toBe('gemini');
+        });
+
+        it('should store retryable flag', () => {
+            const error = new RerankingError('Rate limit', 'cohere', { retryable: true });
+            expect(error.retryable).toBe(true);
+        });
+
+        it('should default retryable to true', () => {
+            const error = new RerankingError('Network error', 'gemini');
+            expect(error.retryable).toBe(true);
+        });
+    });
+
+    describe('Correlation ID Utilities', () => {
+        it('should generate unique correlation IDs', () => {
+            const id1 = generateCorrelationId();
+            const id2 = generateCorrelationId();
+            expect(id1).not.toBe(id2);
+            expect(id1).toMatch(/^crag_/);
+            expect(id2).toMatch(/^crag_/);
+        });
+
+        it('should set and get correlation ID', () => {
+            const testId = 'crag_test_123';
+            setCorrelationId(testId);
+            expect(getCorrelationId()).toBe(testId);
+            clearCorrelationId();
+        });
+
+        it('should clear correlation ID', () => {
+            setCorrelationId('crag_test_456');
+            clearCorrelationId();
+            const newId = getCorrelationId();
+            expect(newId).not.toBe('crag_test_456');
+            expect(newId).toMatch(/^crag_/);
+        });
+    });
+
+    describe('wrapError', () => {
+        it('should return same error if already ContextRAGError', () => {
+            const original = new IngestionError('Already wrapped');
+            const wrapped = wrapError(original, IngestionError);
+            expect(wrapped).toBe(original);
+        });
+
+        it('should wrap standard Error', () => {
+            const original = new Error('Standard error');
+            const wrapped = wrapError(original, IngestionError);
+            expect(wrapped).toBeInstanceOf(IngestionError);
+            expect(wrapped.message).toBe('Standard error');
+        });
+
+        it('should wrap string error', () => {
+            const wrapped = wrapError('String error', SearchError);
+            expect(wrapped).toBeInstanceOf(SearchError);
+            expect(wrapped.message).toBe('String error');
+        });
+    });
 });
+
