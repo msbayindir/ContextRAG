@@ -1,5 +1,6 @@
 import type { LogConfig } from '../types/config.types.js';
 import { getCorrelationId } from '../errors/index.js';
+import pino from 'pino';
 
 export interface LogMeta {
     correlationId?: string;
@@ -15,75 +16,65 @@ export interface Logger {
     error(message: string, meta?: LogMeta): void;
 }
 
-const LOG_LEVELS = {
-    debug: 0,
-    info: 1,
-    warn: 2,
-    error: 3,
-} as const;
+/**
+ * Pino log level mapping
+ */
+const PINO_LEVELS: Record<string, string> = {
+    debug: 'debug',
+    info: 'info',
+    warn: 'warn',
+    error: 'error',
+};
 
 /**
- * Creates a logger instance based on configuration
+ * Creates a high-performance Pino logger instance
  * Automatically injects correlation ID into all log entries
+ * 
+ * Features:
+ * - Async, non-blocking writes (5-10x faster than console.log)
+ * - Structured JSON logging for production
+ * - Pretty print for development
+ * - Automatic correlation ID injection
  */
 export function createLogger(config: LogConfig): Logger {
-    const currentLevel = LOG_LEVELS[config.level];
+    // Use pino-pretty for development (non-structured), raw JSON for production
+    const pinoLogger = pino({
+        level: config.level,
+        // Use transport for pretty printing in dev mode
+        ...(config.structured === false && {
+            transport: {
+                target: 'pino-pretty',
+                options: {
+                    colorize: true,
+                    translateTime: 'SYS:standard',
+                    ignore: 'pid,hostname',
+                },
+            },
+        }),
+    });
 
-    const shouldLog = (level: keyof typeof LOG_LEVELS): boolean => {
-        return LOG_LEVELS[level] >= currentLevel;
-    };
+    /**
+     * Enrich metadata with correlation ID
+     */
+    const enrichMeta = (meta?: LogMeta): LogMeta => ({
+        correlationId: meta?.correlationId ?? getCorrelationId(),
+        ...meta,
+    });
 
-    const formatMessage = (
-        level: string,
-        message: string,
-        meta?: LogMeta
-    ): string => {
-        // Auto-inject correlation ID if not provided
-        const enrichedMeta = {
-            correlationId: meta?.correlationId ?? getCorrelationId(),
-            ...meta,
-        };
+    /**
+     * Log with optional custom logger fallback
+     */
+    const log = (level: keyof typeof PINO_LEVELS, message: string, meta?: LogMeta): void => {
+        const enrichedMeta = enrichMeta(meta);
 
-        if (config.structured) {
-            return JSON.stringify({
-                timestamp: new Date().toISOString(),
-                level,
-                message,
-                ...enrichedMeta,
-            });
-        }
-        const metaStr = enrichedMeta ? ` ${JSON.stringify(enrichedMeta)}` : '';
-        return `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}${metaStr}`;
-    };
-
-    const log = (level: keyof typeof LOG_LEVELS, message: string, meta?: LogMeta): void => {
-        if (!shouldLog(level)) return;
-
+        // Support custom logger if configured
         if (config.customLogger) {
-            // Inject correlation ID for custom loggers too
-            const enrichedMeta = {
-                correlationId: meta?.correlationId ?? getCorrelationId(),
-                ...meta,
-            };
             config.customLogger(level, message, enrichedMeta);
             return;
         }
 
-        const formattedMessage = formatMessage(level, message, meta);
-
-        switch (level) {
-            case 'debug':
-            case 'info':
-                // eslint-disable-next-line no-console
-                console.log(formattedMessage);
-                break;
-            case 'warn':
-                console.warn(formattedMessage);
-                break;
-            case 'error':
-                console.error(formattedMessage);
-                break;
-        }
+        // Use Pino's native logging
+        pinoLogger[level as 'debug' | 'info' | 'warn' | 'error'](enrichedMeta, message);
     };
 
     return {
@@ -93,3 +84,4 @@ export function createLogger(config: LogConfig): Logger {
         error: (message: string, meta?: LogMeta) => log('error', message, meta),
     };
 }
+
