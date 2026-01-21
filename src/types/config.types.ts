@@ -182,6 +182,20 @@ export interface ContextRAGConfig {
      * @example { 'RECIPE': 'TEXT', 'INGREDIENT': 'LIST', 'NUTRITION': 'TABLE' }
      */
     chunkTypeMapping?: ChunkTypeMapping;
+
+    /**
+     * Embedding provider configuration (default: Gemini)
+     * Allows switching between different embedding providers
+     * @example { provider: 'openai', model: 'text-embedding-3-large' }
+     */
+    embeddingProvider?: {
+        /** Provider type: 'gemini' | 'openai' | 'cohere' */
+        provider: 'gemini' | 'openai' | 'cohere';
+        /** API key (uses main API key if not specified) */
+        apiKey?: string;
+        /** Model name for embeddings */
+        model?: string;
+    };
 }
 
 /**

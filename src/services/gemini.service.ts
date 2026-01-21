@@ -1,9 +1,11 @@
-import { GoogleGenerativeAI, type GenerativeModel, type Part, type Content, TaskType } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerativeModel, type Part, type Content } from '@google/generative-ai';
 import { GoogleAIFileManager } from '@google/generative-ai/server';
 import { z } from 'zod';
 import { zodToGeminiSchema } from '../schemas/structured-output.schemas.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { TokenUsage } from '../types/chunk.types.js';
+import type { EmbeddingProvider, EmbeddingTaskType } from '../types/embedding-provider.types.js';
+import { createEmbeddingProvider } from '../providers/embedding-provider.factory.js';
 import { RateLimitError, GeminiAPIError, ContentPolicyError } from '../errors/index.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
 import type { Logger } from '../utils/logger.js';
@@ -27,34 +29,41 @@ export interface EmbeddingResponse {
 /**
  * Embedding task type for optimized embeddings
  * @see https://ai.google.dev/gemini-api/docs/embeddings
+ * @deprecated Use EmbeddingTaskType from embedding-provider.types.ts
  */
-export type EmbeddingTaskType =
-    | 'RETRIEVAL_DOCUMENT'  // For documents to be indexed
-    | 'RETRIEVAL_QUERY'     // For search queries
-    | 'SEMANTIC_SIMILARITY' // For similarity comparison
-    | 'CLASSIFICATION'      // For classification tasks
-    | 'CLUSTERING';         // For clustering tasks
+export type { EmbeddingTaskType } from '../types/embedding-provider.types.js';
 
 /**
  * Gemini API service wrapper
+ * 
+ * Handles generation tasks. Embedding is delegated to EmbeddingProvider.
  */
 export class GeminiService {
     private readonly genAI: GoogleGenerativeAI;
     private readonly fileManager: GoogleAIFileManager;
     private readonly model: GenerativeModel;
-    private readonly embeddingModel: GenerativeModel;
     private readonly config: ResolvedConfig;
     private readonly rateLimiter: RateLimiter;
     private readonly logger: Logger;
+
+    /** Embedding provider instance */
+    private readonly embeddingProvider: EmbeddingProvider;
 
     constructor(config: ResolvedConfig, rateLimiter: RateLimiter, logger: Logger) {
         this.genAI = new GoogleGenerativeAI(config.geminiApiKey);
         this.fileManager = new GoogleAIFileManager(config.geminiApiKey);
         this.model = this.genAI.getGenerativeModel({ model: config.model });
-        this.embeddingModel = this.genAI.getGenerativeModel({ model: config.embeddingModel });
         this.config = config;
         this.rateLimiter = rateLimiter;
         this.logger = logger;
+
+        // Create embedding provider (modular architecture)
+        this.embeddingProvider = createEmbeddingProvider(config, rateLimiter, logger);
+
+        this.logger.debug('GeminiService initialized', {
+            model: config.model,
+            embeddingProvider: this.embeddingProvider.id,
+        });
     }
 
     /**
@@ -159,74 +168,49 @@ export class GeminiService {
      * - Use RETRIEVAL_QUERY for search queries
      * 
      * @see https://ai.google.dev/gemini-api/docs/embeddings
+     * @deprecated Use embeddingProvider directly for new code
      */
     async embed(
         text: string,
         taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT'
     ): Promise<EmbeddingResponse> {
-        await this.rateLimiter.acquire();
-
-        try {
-            const result = await this.embeddingModel.embedContent({
-                content: { parts: [{ text }], role: 'user' },
-                taskType: this.mapTaskType(taskType),
-            });
-
-            this.rateLimiter.reportSuccess();
-
-            return {
-                embedding: result.embedding.values,
-                tokenCount: text.split(/\s+/).length, // Approximate
-            };
-        } catch (error) {
-            this.handleError(error as Error);
-            throw error;
-        }
+        // Delegate to embedding provider
+        return this.embeddingProvider.embed(text, taskType);
     }
 
     /**
      * Generate embeddings for documents (for indexing)
      * Uses RETRIEVAL_DOCUMENT task type
+     * @deprecated Use embeddingProvider.embedDocument directly
      */
     async embedDocument(text: string): Promise<EmbeddingResponse> {
-        return this.embed(text, 'RETRIEVAL_DOCUMENT');
+        return this.embeddingProvider.embedDocument(text);
     }
 
     /**
      * Generate embeddings for search query
      * Uses RETRIEVAL_QUERY task type
+     * @deprecated Use embeddingProvider.embedQuery directly
      */
     async embedQuery(text: string): Promise<EmbeddingResponse> {
-        return this.embed(text, 'RETRIEVAL_QUERY');
+        return this.embeddingProvider.embedQuery(text);
     }
 
     /**
      * Generate embeddings for multiple documents (batch)
      * Uses RETRIEVAL_DOCUMENT task type
+     * @deprecated Use embeddingProvider.embedBatch directly
      */
     async embedBatch(texts: string[]): Promise<EmbeddingResponse[]> {
-        const results: EmbeddingResponse[] = [];
-
-        for (const text of texts) {
-            const result = await this.embedDocument(text);
-            results.push(result);
-        }
-
-        return results;
+        return this.embeddingProvider.embedBatch(texts);
     }
 
     /**
-     * Map our task type enum to Gemini's TaskType
+     * Get the underlying embedding provider
+     * Use this for direct access to provider features
      */
-    private mapTaskType(taskType: EmbeddingTaskType): TaskType {
-        const mapping: Record<EmbeddingTaskType, TaskType> = {
-            'RETRIEVAL_DOCUMENT': TaskType.RETRIEVAL_DOCUMENT,
-            'RETRIEVAL_QUERY': TaskType.RETRIEVAL_QUERY,
-            'SEMANTIC_SIMILARITY': TaskType.SEMANTIC_SIMILARITY,
-            'CLASSIFICATION': TaskType.CLASSIFICATION,
-            'CLUSTERING': TaskType.CLUSTERING,
-        };
-        return mapping[taskType];
+    getEmbeddingProvider(): EmbeddingProvider {
+        return this.embeddingProvider;
     }
 
     /**

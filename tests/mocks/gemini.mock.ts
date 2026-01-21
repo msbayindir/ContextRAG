@@ -110,6 +110,19 @@ This is a sample paragraph that was extracted.
             ],
             tokenUsage: { input: 500, output: 200, total: 700 },
         }),
+
+        // Embedding provider access
+        getEmbeddingProvider: vi.fn().mockReturnValue({
+            id: 'gemini-text-embedding-004',
+            dimension: 768,
+            model: 'text-embedding-004',
+            embed: vi.fn().mockResolvedValue({ embedding: [...DEFAULT_EMBEDDING], tokenCount: 10 }),
+            embedBatch: vi.fn().mockImplementation((texts: string[]) =>
+                Promise.resolve(texts.map(() => ({ embedding: [...DEFAULT_EMBEDDING], tokenCount: 10 })))
+            ),
+            embedDocument: vi.fn().mockResolvedValue({ embedding: [...DEFAULT_EMBEDDING], tokenCount: 10 }),
+            embedQuery: vi.fn().mockResolvedValue({ embedding: [...DEFAULT_EMBEDDING], tokenCount: 8 }),
+        }),
     };
 }
 
