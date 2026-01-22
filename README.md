@@ -324,6 +324,12 @@ npx @msbayindir/context-rag init --force
 
 # Check setup status (Prisma models, pgvector, env variables)
 npx @msbayindir/context-rag status
+
+# Check for embedding model mismatches
+npx @msbayindir/context-rag check-embeddings
+
+# Re-index documents (useful after changing embedding models)
+npx @msbayindir/context-rag reindex --concurrency 5
 ```
 
 ---
@@ -594,34 +600,152 @@ await rag.ingest({
 ## ⚙️ Configuration
 
 ```typescript
+## ⚙️ Configuration Reference
+
+Context-RAG is highly configurable. Below is the complete list of all available options.
+
+```typescript
 const rag = new ContextRAG({
-  // Required
+  // ============================================
+  // CORE CONFIGURATION (Required)
+  // ============================================
+
+  /** Your initialized Prisma client instance */
   prisma: prismaClient,
-  geminiApiKey: 'your-api-key',
 
-  // Model selection
-  model: 'gemini-3-flash-preview',
-  embeddingModel: 'gemini-embedding-exp-03-07',
+  /** Gemini API Key (Required for generation and default embeddings) */
+  geminiApiKey: process.env.GEMINI_API_KEY!,
 
-  // Generation
+  // ============================================
+  // MODEL SELECTION
+  // ============================================
+
+  /** 
+   * Main LLM model for generation, orchestration, and RAG enhancement.
+   * Default: 'gemini-1.5-pro'
+   */
+  model: 'gemini-1.5-pro', // Options: 'gemini-1.5-flash', 'gemini-2.0-flash-exp', etc.
+
+  /**
+   * Configuration for the LLM generation (temperature, tokens, etc.)
+   */
   generationConfig: {
-    temperature: 0.2,
-    maxOutputTokens: 16384,
+    temperature: 0.3,        // Creativity (0.0 - 1.0). Lower is more deterministic.
+    maxOutputTokens: 8192,   // Maximum length of the generated response.
   },
 
-  // Batch processing
+  // ============================================
+  // EMBEDDING PROVIDER (Optional)
+  // ============================================
+
+  /**
+   * Choose your embedding provider.
+   * Default: Uses Gemini 'text-embedding-004'
+   */
+  embeddingProvider: {
+    // Provider: 'gemini' | 'openai' | 'cohere'
+    provider: 'openai', 
+
+    // Model name (specific to the provider)
+    model: 'text-embedding-3-small',
+
+    // API Key (if different from geminiApiKey)
+    apiKey: process.env.OPENAI_API_KEY,
+  },
+
+  // ============================================
+  // SYSTEM CONFIGURATION
+  // ============================================
+
+  /**
+   * Batch processing settings for ingestion.
+   * Adjust these based on your API rate limits.
+   */
   batchConfig: {
-    pagesPerBatch: 15,
-    maxConcurrency: 3,
-    maxRetries: 3,
+    pagesPerBatch: 15,       // How many pages to process in one go (Default: 15)
+    maxConcurrency: 3,       // How many batches to run in parallel (Default: 3)
+    maxRetries: 3,           // Retry failed batches (Default: 3)
+    retryDelayMs: 1000,      // Initial delay before retry (Default: 1000ms)
+    backoffMultiplier: 2,    // Exponential backoff factor (Default: 2)
   },
 
-  // RAG Enhancement
-  ragEnhancement: {
-    approach: 'anthropic_contextual',
-    strategy: 'simple',
-    skipChunkTypes: ['HEADING'],
+  /**
+   * Settings for splitting text into vector chunks.
+   */
+  chunkConfig: {
+    maxTokens: 500,          // Maximum size of a single chunk (Default: 500)
+    overlapTokens: 50,       // Overlap between chunks to preserve continuity (Default: 50)
   },
+
+  /**
+   * API Rate Limiting protection.
+   */
+  rateLimitConfig: {
+    requestsPerMinute: 60,   // Max RPM allowed (Default: 60)
+    adaptive: true,          // Automatically slow down if 429 errors occur (Default: true)
+  },
+
+  /**
+   * System logging configuration.
+   */
+  logging: {
+    level: 'info',           // 'debug' | 'info' | 'warn' | 'error'
+    structured: true,        // Use JSON format for logs (Best for production tools like Datadog/CloudWatch)
+  },
+
+  // ============================================
+  // ADVANCED FEATURES
+  // ============================================
+
+  /**
+   * Reranking improves search relevance by re-scoring results.
+   */
+  rerankingConfig: {
+    enabled: true,           // Enable automatic reranking (Default: false)
+    provider: 'cohere',      // 'gemini' or 'cohere' (Cohere is recommended for best results)
+    cohereApiKey: process.env.COHERE_API_KEY, // Required if provider is 'cohere'
+    defaultCandidates: 50,   // Retrieve top 50 from Vector DB...
+    defaultTopK: 10,         // ...and return top 10 after reranking.
+  },
+
+  /**
+   * RAG Enhancement (Contextual Retrieval).
+   * Adds context to chunks before embedding them.
+   */
+  ragEnhancement: {
+    // Approach: 'anthropic_contextual' (Recommended) or 'none'
+    approach: 'anthropic_contextual',
+
+    // Strategy: 'llm' (Best Quality) or 'simple' (Template based)
+    strategy: 'llm',
+
+    // Model to use for generating context (Optional, defaults to main model)
+    // Tip: Use a cheaper model here (e.g., 'gemini-1.5-flash') to save costs.
+    model: 'gemini-1.5-flash',
+
+    // Prompt used to generate context (Optional, has good default)
+    contextPrompt: 'Situate this chunk within the document...',
+
+    // Don't waste tokens generating context for these types
+    skipChunkTypes: ['HEADING', 'IMAGE_REF', 'CODE'], 
+  },
+
+  /** 
+   * Enable Structured Output (JSON Schema) for reliable parsing.
+   * Disable only if you are using a model that doesn't support it well.
+   * Default: true 
+   */
+  useStructuredOutput: true,
+
+  /**
+   * Custom Chunk Type Mapping.
+   * Map your custom extraction types to system types for proper handling.
+   */
+  chunkTypeMapping: {
+    'RECIPE': 'TEXT',        // Treat 'RECIPE' as normal text
+    'INGREDIENT_LIST': 'LIST', // Treat 'INGREDIENT_LIST' as a list
+    'NUTRITIONAL_INFO': 'TABLE' // Treat 'NUTRITIONAL_INFO' as a table
+  }
 });
 ```
 

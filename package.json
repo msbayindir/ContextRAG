@@ -1,6 +1,6 @@
 {
   "name": "@msbayindir/context-rag",
-  "version": "1.0.0-beta.10",
+  "version": "1.0.0-beta.11",
   "type": "module",
   "description": "A powerful, multimodal RAG engine with contextual retrieval, auto-prompt discovery, and PostgreSQL-native vector search",
   "main": "dist/index.js",

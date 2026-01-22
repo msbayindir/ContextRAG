@@ -9,7 +9,7 @@ const program = new Command();
 program
     .name('context-rag')
     .description('Context-RAG CLI - Setup and management tools')
-    .version('1.0.0-beta.1');
+    .version('1.0.0-beta.11');
 
 program
     .command('init')
