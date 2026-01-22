@@ -10,6 +10,8 @@
 
 > ⚠️ **Status: Beta** — Actively used in production (medical RAG & enterprise docs), API stable, breaking changes documented.
 
+> ⭐ **If this project helps you build better RAG systems, consider giving it a star!** It helps others discover this project.
+
 ---
 
 ## ⚡ 60-Second Quick Start
