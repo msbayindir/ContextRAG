@@ -11,7 +11,6 @@ import type {
     IngestOptions,
     IngestResult,
     DocumentStatus,
-    RetryOptions,
 } from './types/ingestion.types.js';
 import type {
     SearchOptions,
@@ -34,7 +33,7 @@ import {
     DEFAULT_LOG_CONFIG,
     DEFAULT_RERANKING_CONFIG,
 } from './types/config.types.js';
-import { ConfigurationError, NotFoundError, IngestionError } from './errors/index.js';
+import { ConfigurationError, NotFoundError } from './errors/index.js';
 import { createLogger, RateLimiter } from './utils/index.js';
 import type { Logger } from './utils/logger.js';
 import {
@@ -290,25 +289,6 @@ export class ContextRAG {
         return this.documentRepo.getById(documentId);
     }
 
-    /**
-     * Retry failed batches for a document
-     */
-    async retryFailedBatches(
-        documentId: string,
-        _options?: RetryOptions
-    ): Promise<IngestResult> {
-        // Get the document to get the file info
-        const doc = await this.documentRepo.getById(documentId);
-
-        // For now, throw an error - full implementation would require storing the file
-        throw new IngestionError(
-            `Retry not yet fully implemented. Document ${doc.id} has ${doc.progress.failedBatches} failed batches.`,
-            {
-                retryable: false,
-                details: { documentId: doc.id, failedBatches: doc.progress.failedBatches },
-            }
-        );
-    }
 
     // ============================================
     // SEARCH METHODS

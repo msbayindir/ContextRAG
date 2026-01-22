@@ -189,7 +189,7 @@ export class ChunkRepository {
         filters?: SearchFilters
     ): Promise<ChunkSearchResult[]> {
         const whereConditions: string[] = [
-            `to_tsvector('english', c.search_content) @@ plainto_tsquery('english', $1)`
+            `to_tsvector('simple', c.search_content) @@ plainto_tsquery('simple', $1)`
         ];
         const params: unknown[] = [query, limit];
         let paramIndex = 3;
@@ -215,7 +215,7 @@ export class ChunkRepository {
         c.search_content, c.display_content,
         c.source_page_start, c.source_page_end, c.confidence_score,
         c.metadata, c.created_at,
-        ts_rank(to_tsvector('english', c.search_content), plainto_tsquery('english', $1)) as similarity
+        ts_rank(to_tsvector('simple', c.search_content), plainto_tsquery('simple', $1)) as similarity
       FROM context_rag_chunks c
       ${whereClause}
       ORDER BY similarity DESC

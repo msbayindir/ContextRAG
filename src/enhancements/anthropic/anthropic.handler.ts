@@ -19,6 +19,7 @@ import type { ResolvedConfig } from '../../types/config.types.js';
 import { RateLimiter } from '../../utils/rate-limiter.js';
 import { createLogger, type Logger } from '../../utils/logger.js';
 import pLimit from 'p-limit';
+import { GENERATION_DEFAULTS } from '../../config/constants.js';
 
 export class AnthropicHandler implements EnhancementHandler {
     private readonly config: AnthropicContextualConfig;
@@ -113,8 +114,8 @@ ${chunk.content}
             // If we have a cached PDF URI, use it for full document context
             if (doc.fileUri) {
                 const result = await this.gemini.generateWithPdfUri(doc.fileUri, structuredPrompt, {
-                    maxOutputTokens: 256 * 4,  // Short output
-                    temperature: 0.1       // Deterministic
+                    maxOutputTokens: GENERATION_DEFAULTS.CONTEXT_GENERATION.maxOutputTokens,
+                    temperature: GENERATION_DEFAULTS.CONTEXT_GENERATION.temperature
                 });
                 return result.text.trim();
             }

@@ -9,6 +9,7 @@ import { createEmbeddingProvider } from '../providers/embedding-provider.factory
 import { RateLimitError, GeminiAPIError, ContentPolicyError } from '../errors/index.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
 import type { Logger } from '../utils/logger.js';
+import { GENERATION_DEFAULTS } from '../config/constants.js';
 
 /**
  * Response from Gemini API
@@ -229,8 +230,8 @@ export class GeminiService {
                     },
                 ],
                 generationConfig: {
-                    temperature: 0.3,
-                    maxOutputTokens: 200, // Short context
+                    temperature: GENERATION_DEFAULTS.SIMPLE.temperature,
+                    maxOutputTokens: GENERATION_DEFAULTS.SIMPLE.maxOutputTokens,
                 },
             });
 
@@ -258,8 +259,8 @@ export class GeminiService {
                     },
                 ],
                 generationConfig: {
-                    temperature: 0.1,  // More deterministic
-                    maxOutputTokens: 2048,  // Enough for scoring ~50 docs
+                    temperature: GENERATION_DEFAULTS.RERANKING.temperature,
+                    maxOutputTokens: GENERATION_DEFAULTS.RERANKING.maxOutputTokens,
                 },
             });
 
@@ -309,13 +310,14 @@ export class GeminiService {
      * File is cached by Gemini for efficient reuse
      */
     async uploadPdfBuffer(buffer: Buffer, filename: string): Promise<string> {
-        try {
-            // Write buffer to temp file (FileManager requires file path)
-            const fs = await import('fs');
-            const path = await import('path');
-            const os = await import('os');
+        // Write buffer to temp file (FileManager requires file path)
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
 
-            const tempPath = path.join(os.tmpdir(), `context-rag-${Date.now()}-${filename}`);
+        const tempPath = path.join(os.tmpdir(), `context-rag-${Date.now()}-${filename}`);
+
+        try {
             fs.writeFileSync(tempPath, buffer);
 
             this.logger.info('Uploading PDF to Gemini Files API', { filename });
@@ -324,9 +326,6 @@ export class GeminiService {
                 mimeType: 'application/pdf',
                 displayName: filename,
             });
-
-            // Cleanup temp file
-            fs.unlinkSync(tempPath);
 
             this.logger.info('PDF uploaded successfully', {
                 fileUri: uploadResult.file.uri,
@@ -337,6 +336,11 @@ export class GeminiService {
         } catch (error) {
             this.logger.error('Failed to upload PDF', { error: (error as Error).message });
             throw error;
+        } finally {
+            // Always cleanup temp file, even on error
+            if (fs.existsSync(tempPath)) {
+                fs.unlinkSync(tempPath);
+            }
         }
     }
 

@@ -10,6 +10,7 @@ import type { ResolvedConfig } from '../types/config.types.js';
 import type { Logger } from '../utils/logger.js';
 import { RerankingError } from '../errors/index.js';
 import { z } from 'zod';
+import { SEARCH_DEFAULTS } from '../config/constants.js';
 
 /**
  * Document to be reranked
@@ -79,8 +80,9 @@ export class GeminiReranker implements RerankerService {
         });
 
         // Build prompt with documents - use index as ID for simplicity
+        const snippetLength = SEARCH_DEFAULTS.RERANK_SNIPPET_LENGTH;
         const docsText = documents.map((doc, i) =>
-            `[DOC_${i}] ${doc.content.substring(0, 400)}${doc.content.length > 400 ? '...' : ''}`
+            `[DOC_${i}] ${doc.content.substring(0, snippetLength)}${doc.content.length > snippetLength ? '...' : ''}`
         ).join('\n\n---\n\n');
 
         const prompt = `TASK: Score document relevance to query. Return ONLY JSON.
