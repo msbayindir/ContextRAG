@@ -8,6 +8,7 @@ import type {
 import type { RerankingConfig } from '../types/config.types.js';
 import { ChunkRepository } from '../database/repositories/chunk.repository.js';
 import { GeminiService } from '../services/gemini.service.js';
+import type { EmbeddingProvider } from '../types/embedding-provider.types.js';
 import { createReranker, type RerankerService } from '../services/reranker.service.js';
 import type { Logger } from '../utils/logger.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
@@ -19,17 +20,20 @@ import { SearchModeEnum } from '../types/enums.js';
 export class RetrievalEngine {
     private readonly chunkRepo: ChunkRepository;
     private readonly gemini: GeminiService;
+    private readonly embeddingProvider: EmbeddingProvider;
     private readonly logger: Logger;
     private readonly reranker: RerankerService;
     private readonly rerankingConfig: RerankingConfig;
 
     constructor(
         config: ResolvedConfig,
+        embeddingProvider: EmbeddingProvider,
         rateLimiter: RateLimiter,
         logger: Logger
     ) {
         this.chunkRepo = new ChunkRepository(config.prisma);
         this.gemini = new GeminiService(config, rateLimiter, logger);
+        this.embeddingProvider = embeddingProvider;
         this.logger = logger;
         this.rerankingConfig = config.rerankingConfig;
         this.reranker = createReranker(config, this.gemini, logger);
@@ -151,7 +155,7 @@ export class RetrievalEngine {
         minScore?: number
     ): Promise<SearchResult[]> {
         // Generate query embedding with RETRIEVAL_QUERY task type
-        const { embedding } = await this.gemini.embedQuery(query);
+        const { embedding } = await this.embeddingProvider.embedQuery(query);
 
         // Search in vector database
         const results = await this.chunkRepo.searchSemantic(

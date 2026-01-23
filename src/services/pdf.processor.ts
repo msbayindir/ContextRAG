@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import type { Part } from '@google/generative-ai';
+
 import pdf from 'pdf-parse';
 import { hashBuffer } from '../utils/hash.js';
 import type { Logger } from '../utils/logger.js';
@@ -106,24 +106,7 @@ export class PDFProcessor {
         }];
     }
 
-    /**
-     * Convert PDF buffer to base64 for Gemini Vision API
-     */
-    toBase64(buffer: Buffer): string {
-        return buffer.toString('base64');
-    }
 
-    /**
-     * Create Gemini vision part from PDF
-     */
-    createVisionPart(buffer: Buffer): Part {
-        return {
-            inlineData: {
-                mimeType: 'application/pdf',
-                data: this.toBase64(buffer),
-            },
-        };
-    }
 
     /**
      * Split document into batches

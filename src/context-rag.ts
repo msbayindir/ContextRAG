@@ -46,6 +46,7 @@ import {
     checkPgVectorExtension,
     getDatabaseStats,
 } from './database/utils.js';
+import { createEmbeddingProvider } from './providers/embedding-provider.factory.js';
 import { IngestionEngine } from './engines/ingestion.engine.js';
 import { RetrievalEngine } from './engines/retrieval.engine.js';
 import { DiscoveryEngine } from './engines/discovery.engine.js';
@@ -104,14 +105,17 @@ export class ContextRAG {
         // Initialize rate limiter
         this.rateLimiter = new RateLimiter(this.config.rateLimitConfig);
 
+        // Initialize embedding provider (modular architecture)
+        const embeddingProvider = createEmbeddingProvider(this.config, this.rateLimiter, this.logger);
+
         // Initialize repositories
         this.promptConfigRepo = new PromptConfigRepository(this.config.prisma);
         this.documentRepo = new DocumentRepository(this.config.prisma);
         this.chunkRepo = new ChunkRepository(this.config.prisma);
 
         // Initialize engines
-        this.ingestionEngine = new IngestionEngine(this.config, this.rateLimiter, this.logger);
-        this.retrievalEngine = new RetrievalEngine(this.config, this.rateLimiter, this.logger);
+        this.ingestionEngine = new IngestionEngine(this.config, embeddingProvider, this.rateLimiter, this.logger);
+        this.retrievalEngine = new RetrievalEngine(this.config, embeddingProvider, this.rateLimiter, this.logger);
         this.discoveryEngine = new DiscoveryEngine(this.config, this.rateLimiter, this.logger);
 
         this.logger.info('Context-RAG initialized', {

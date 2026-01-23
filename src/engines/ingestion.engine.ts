@@ -17,6 +17,7 @@ import { ChunkRepository } from '../database/repositories/chunk.repository.js';
 import { PromptConfigRepository } from '../database/repositories/prompt-config.repository.js';
 import { GeminiService } from '../services/gemini.service.js';
 import { PDFProcessor } from '../services/pdf.processor.js';
+import type { EmbeddingProvider } from '../types/embedding-provider.types.js';
 import { withRetry, getRetryOptions } from '../utils/retry.js';
 import type { Logger } from '../utils/logger.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
@@ -52,13 +53,17 @@ export class IngestionEngine {
     private readonly logger: Logger;
     private readonly enhancementHandler: EnhancementHandler;
 
+    private readonly embeddingProvider: EmbeddingProvider;
+
     constructor(
         config: ResolvedConfig,
+        embeddingProvider: EmbeddingProvider,
         rateLimiter: RateLimiter,
         logger: Logger
     ) {
         this.config = config;
         this.prisma = config.prisma;
+        this.embeddingProvider = embeddingProvider;
         this.gemini = new GeminiService(config, rateLimiter, logger);
         this.pdfProcessor = new PDFProcessor(logger);
         this.documentRepo = new DocumentRepository(this.prisma);
@@ -615,7 +620,7 @@ export class IngestionEngine {
             const textsToEmbed = chunks.map(c =>
                 c.enrichedContent ?? c.searchContent
             );
-            const embeddings = await this.gemini.embedBatch(textsToEmbed);
+            const embeddings = await this.embeddingProvider.embedBatch(textsToEmbed);
 
             await this.chunkRepo.createMany(
                 chunks,

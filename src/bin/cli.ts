@@ -262,8 +262,7 @@ program
         console.log('🔍 Checking embedding model status...\n');
 
         try {
-            // Dynamic import to verify module exists (void to suppress unused warning)
-            void (await import('../utils/embedding-utils.js'));
+
 
             // We can't fully check without a configured client, so just show stats
             console.log('⚠️  Full mismatch detection requires database connection.');

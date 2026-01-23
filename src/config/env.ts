@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod';
+import { ConfigurationError } from '../errors/index.js';
 
 /**
  * Environment variable schema with validation
@@ -67,7 +68,7 @@ function parseEnv(): Env {
             })
             .join('\n');
 
-        throw new Error(`Environment validation failed:\n${errors}`);
+        throw new ConfigurationError(`Environment validation failed:\n${errors}`);
     }
 
     return result.data;

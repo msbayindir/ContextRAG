@@ -113,7 +113,7 @@ export class CohereEmbeddingProvider implements EmbeddingProvider {
             const embedding = data.embeddings[0];
 
             if (!embedding) {
-                throw new Error('No embedding returned from Cohere API');
+                throw new GeminiAPIError('No embedding returned from Cohere API');
             }
 
             return {

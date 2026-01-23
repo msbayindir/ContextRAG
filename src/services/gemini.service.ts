@@ -4,8 +4,6 @@ import { z } from 'zod';
 import { zodToGeminiSchema } from '../schemas/structured-output.schemas.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { TokenUsage } from '../types/chunk.types.js';
-import type { EmbeddingProvider, EmbeddingTaskType } from '../types/embedding-provider.types.js';
-import { createEmbeddingProvider } from '../providers/embedding-provider.factory.js';
 import { RateLimitError, GeminiAPIError, ContentPolicyError } from '../errors/index.js';
 import { RateLimiter } from '../utils/rate-limiter.js';
 import type { Logger } from '../utils/logger.js';
@@ -27,12 +25,7 @@ export interface EmbeddingResponse {
     tokenCount: number;
 }
 
-/**
- * Embedding task type for optimized embeddings
- * @see https://ai.google.dev/gemini-api/docs/embeddings
- * @deprecated Use EmbeddingTaskType from embedding-provider.types.ts
- */
-export type { EmbeddingTaskType } from '../types/embedding-provider.types.js';
+
 
 /**
  * Gemini API service wrapper
@@ -47,9 +40,6 @@ export class GeminiService {
     private readonly rateLimiter: RateLimiter;
     private readonly logger: Logger;
 
-    /** Embedding provider instance */
-    private readonly embeddingProvider: EmbeddingProvider;
-
     constructor(config: ResolvedConfig, rateLimiter: RateLimiter, logger: Logger) {
         this.genAI = new GoogleGenerativeAI(config.geminiApiKey);
         this.fileManager = new GoogleAIFileManager(config.geminiApiKey);
@@ -58,14 +48,12 @@ export class GeminiService {
         this.rateLimiter = rateLimiter;
         this.logger = logger;
 
-        // Create embedding provider (modular architecture)
-        this.embeddingProvider = createEmbeddingProvider(config, rateLimiter, logger);
-
         this.logger.debug('GeminiService initialized', {
             model: config.model,
-            embeddingProvider: this.embeddingProvider.id,
         });
     }
+
+
 
     /**
      * Generate text content
@@ -161,58 +149,7 @@ export class GeminiService {
         }
     }
 
-    /**
-     * Generate embeddings for text with task type
-     * 
-     * Best practices:
-     * - Use RETRIEVAL_DOCUMENT for documents being indexed
-     * - Use RETRIEVAL_QUERY for search queries
-     * 
-     * @see https://ai.google.dev/gemini-api/docs/embeddings
-     * @deprecated Use embeddingProvider directly for new code
-     */
-    async embed(
-        text: string,
-        taskType: EmbeddingTaskType = 'RETRIEVAL_DOCUMENT'
-    ): Promise<EmbeddingResponse> {
-        // Delegate to embedding provider
-        return this.embeddingProvider.embed(text, taskType);
-    }
 
-    /**
-     * Generate embeddings for documents (for indexing)
-     * Uses RETRIEVAL_DOCUMENT task type
-     * @deprecated Use embeddingProvider.embedDocument directly
-     */
-    async embedDocument(text: string): Promise<EmbeddingResponse> {
-        return this.embeddingProvider.embedDocument(text);
-    }
-
-    /**
-     * Generate embeddings for search query
-     * Uses RETRIEVAL_QUERY task type
-     * @deprecated Use embeddingProvider.embedQuery directly
-     */
-    async embedQuery(text: string): Promise<EmbeddingResponse> {
-        return this.embeddingProvider.embedQuery(text);
-    }
-
-    /**
-     * Generate embeddings for multiple documents (batch)
-     * Uses RETRIEVAL_DOCUMENT task type
-     * @deprecated Use embeddingProvider.embedBatch directly
-     */
-    async embedBatch(texts: string[]): Promise<EmbeddingResponse[]> {
-        return this.embeddingProvider.embedBatch(texts);
-    }
-
-    /**
-     * Get the underlying embedding provider
-     * Use this for direct access to provider features
-     */
-    getEmbeddingProvider(): EmbeddingProvider {
-        return this.embeddingProvider;
-    }
 
     /**
      * Simple text generation (single prompt)
@@ -261,38 +198,6 @@ export class GeminiService {
                 generationConfig: {
                     temperature: GENERATION_DEFAULTS.RERANKING.temperature,
                     maxOutputTokens: GENERATION_DEFAULTS.RERANKING.maxOutputTokens,
-                },
-            });
-
-            this.rateLimiter.reportSuccess();
-            return result.response.text().trim();
-        } catch (error) {
-            this.handleError(error as Error);
-            throw error;
-        }
-    }
-
-    /**
-     * Generate content with file reference (for contextual retrieval)
-     * Uses Gemini's file caching for efficiency
-     */
-    async generateWithFileRef(fileUri: string, prompt: string): Promise<string> {
-        await this.rateLimiter.acquire();
-
-        try {
-            const result = await this.model.generateContent({
-                contents: [
-                    {
-                        role: 'user',
-                        parts: [
-                            { fileData: { mimeType: 'application/pdf', fileUri } },
-                            { text: prompt },
-                        ],
-                    },
-                ],
-                generationConfig: {
-                    temperature: 0.3,
-                    maxOutputTokens: 200,
                 },
             });
 
@@ -370,8 +275,8 @@ export class GeminiService {
                     },
                 ],
                 generationConfig: {
-                    temperature: options?.temperature ?? 0.3,
-                    maxOutputTokens: options?.maxOutputTokens ?? 200,
+                    temperature: options?.temperature ?? GENERATION_DEFAULTS.PDF_CONTEXT.temperature,
+                    maxOutputTokens: options?.maxOutputTokens ?? GENERATION_DEFAULTS.PDF_CONTEXT.maxOutputTokens,
                 },
             });
 
