@@ -91,20 +91,7 @@ export class PDFProcessor {
         };
     }
 
-    /**
-     * Extract text from all pages
-     */
-    async extractText(buffer: Buffer): Promise<PageContent[]> {
-        const pdfData = await pdf(buffer);
 
-        // pdf-parse returns all text combined, we need to split by pages
-        // This is a limitation - for actual page splitting, we'd need pdf.js
-        // For now, return as single page
-        return [{
-            pageNumber: 1,
-            text: pdfData.text,
-        }];
-    }
 
 
 

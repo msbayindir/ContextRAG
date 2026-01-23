@@ -324,7 +324,7 @@ export class IngestionEngine {
         // Process batches with concurrency control
         const batchResults = await this.processBatchesConcurrently(
             documentId,
-            // buffer removed
+
             documentInstructions,
             exampleFormats,
             promptConfigId ?? 'default',
@@ -386,7 +386,7 @@ export class IngestionEngine {
      */
     private async processBatchesConcurrently(
         documentId: string,
-        // pdfBuffer removed - using Files API fileUri instead
+
         documentInstructions: string[],
         exampleFormats: Record<string, string> | undefined,
         promptConfigId: string,
@@ -405,7 +405,7 @@ export class IngestionEngine {
             const batchPromises = currentBatch.map(batch =>
                 this.processSingleBatch(
                     batch,
-                    // pdfBuffer removed
+
                     documentInstructions,
                     exampleFormats,
                     promptConfigId,
@@ -429,7 +429,7 @@ export class IngestionEngine {
      */
     private async processSingleBatch(
         batch: { id: string; batchIndex: number; pageStart: number; pageEnd: number },
-        // pdfBuffer removed
+
         documentInstructions: string[],
         exampleFormats: Record<string, string> | undefined,
         promptConfigId: string,
