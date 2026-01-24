@@ -1,11 +1,11 @@
-/**
+﻿/**
  * 05 - Custom Extraction with SubTypes & Domains
  * 
  * Extract specific content types using custom prompts.
  * Custom types are automatically preserved in `subType` field for filtering.
  * 
  * Features:
- * - Custom types (CLAUSE, MEDICATION, etc.) → stored in subType
+ * - Custom types (CLAUSE, MEDICATION, etc.)  stored in subType
  * - Domain categorization (legal, medical, educational)
  * - Efficient B-tree index filtering
  * 
@@ -23,7 +23,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function main() {
-    console.log('📝 Context-RAG Custom Extraction Example\n');
+    console.log('Context-RAG Custom Extraction Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient();
@@ -48,7 +48,7 @@ async function main() {
     const pdfBuffer = fs.readFileSync(pdfPath);
 
     // Example 1: Educational Content (Q&A extraction)
-    console.log('\n📚 Example 1: Educational Content (Q&A)');
+    console.log('\\nExample 1: Educational Content (Q&A)');
     
     const educationalResult = await rag.ingest({
         file: pdfBuffer,
@@ -68,10 +68,10 @@ For each chunk, preserve the question number if present.
         onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
     });
 
-    console.log(`   ✅ Created ${educationalResult.chunkCount} educational chunks`);
+    console.log(`    Created ${educationalResult.chunkCount} educational chunks`);
 
     // Example 2: Legal Document
-    console.log('\n⚖️ Example 2: Legal Document');
+    console.log('\\nExample 2: Legal Document');
     
     const legalResult = await rag.ingest({
         file: pdfBuffer,
@@ -91,10 +91,10 @@ Always include section/clause numbers when present.
         onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
     });
 
-    console.log(`   ✅ Created ${legalResult.chunkCount} legal chunks`);
+    console.log(`    Created ${legalResult.chunkCount} legal chunks`);
 
     // Example 3: Medical Document
-    console.log('\n🏥 Example 3: Medical Document');
+    console.log('\\nExample 3: Medical Document');
     
     const medicalResult = await rag.ingest({
         file: pdfBuffer,
@@ -115,10 +115,10 @@ Preserve exact dosages and measurements.
         onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
     });
 
-    console.log(`   ✅ Created ${medicalResult.chunkCount} medical chunks`);
+    console.log(`    Created ${medicalResult.chunkCount} medical chunks`);
 
     // Search with subType filtering (NEW FEATURE!)
-    console.log('\n🔍 Searching by subType (custom types)...');
+    console.log('\\nSearching by subType (custom types)...');
     
     // Find all CLAUSE chunks from legal documents
     const clauses = await rag.search({
@@ -136,7 +136,7 @@ Preserve exact dosages and measurements.
     });
 
     // Search for medications in medical domain
-    console.log('\n💊 Searching for medications...');
+    console.log('\\nSearching for medications...');
     
     const medications = await rag.search({
         query: 'drug dosage administration',
@@ -153,7 +153,7 @@ Preserve exact dosages and measurements.
     });
 
     // Search for exam questions in educational domain
-    console.log('\n📝 Searching for exam questions...');
+    console.log('\\nSearching for exam questions...');
     
     const questions = await rag.search({
         query: 'exam questions about metabolism',
@@ -170,7 +170,7 @@ Preserve exact dosages and measurements.
     });
 
     // Cross-domain search for definitions
-    console.log('\n📖 Cross-domain search for definitions...');
+    console.log('\\nCross-domain search for definitions...');
     
     const definitions = await rag.search({
         query: 'definition meaning terminology',
@@ -187,7 +187,9 @@ Preserve exact dosages and measurements.
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\n✅ Done!');
+    console.log('\\nDone!');
 }
 
 main().catch(console.error);
+
+

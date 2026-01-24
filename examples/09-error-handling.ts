@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 09 - Error Handling
  * 
  * Production-grade error handling patterns for Context-RAG.
@@ -25,7 +25,7 @@ import {
 import { PrismaClient } from '@prisma/client';
 
 async function main() {
-    console.log('🛡️ Context-RAG Error Handling Example\n');
+    console.log('Context-RAG Error Handling Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient();
@@ -36,7 +36,7 @@ async function main() {
     });
 
     // 1. Correlation IDs for Tracing
-    console.log('\n📌 1. Correlation IDs');
+    console.log('\n 1. Correlation IDs');
     
     const correlationId = generateCorrelationId();
     setCorrelationId(correlationId);
@@ -46,7 +46,7 @@ async function main() {
     console.log('   Format: crag_{timestamp}_{random}');
 
     // 2. Error Handling Pattern
-    console.log('\n📌 2. Error Handling Patterns');
+    console.log('\n 2. Error Handling Patterns');
 
     // Example: Ingestion Error
     console.log('\n   Testing IngestionError handling...');
@@ -57,13 +57,13 @@ async function main() {
         });
     } catch (error) {
         if (error instanceof IngestionError) {
-            console.log(`   ✅ Caught IngestionError:`);
+            console.log(`    Caught IngestionError:`);
             console.log(`      Message: ${error.message}`);
             console.log(`      Correlation ID: ${error.correlationId}`);
             console.log(`      Retryable: ${error.retryable}`);
             console.log(`      Batch Index: ${error.batchIndex ?? 'N/A'}`);
         } else {
-            console.log(`   ❌ Unexpected error: ${(error as Error).message}`);
+            console.log(`    Unexpected error: ${(error as Error).message}`);
         }
     }
 
@@ -74,7 +74,7 @@ async function main() {
         throw new NotFoundError('Document', 'non-existent-id');
     } catch (error) {
         if (error instanceof NotFoundError) {
-            console.log(`   ✅ Caught NotFoundError:`);
+            console.log(`    Caught NotFoundError:`);
             console.log(`      Message: ${error.message}`);
             console.log(`      Resource Type: ${error.resourceType}`);
             console.log(`      ID: ${error.resourceId}`);
@@ -82,22 +82,22 @@ async function main() {
     }
 
     // 3. Health Check
-    console.log('\n📌 3. Health Check (Proactive Error Detection)');
+    console.log('\n 3. Health Check (Proactive Error Detection)');
     
     const health = await rag.healthCheck();
     console.log(`   Status: ${health.status}`);
-    console.log(`   Database: ${health.database ? '✅' : '❌'}`);
-    console.log(`   pgvector: ${health.pgvector ? '✅' : '❌'}`);
+    console.log(`   Database: ${health.database ? '' : ''}`);
+    console.log(`   pgvector: ${health.pgvector ? '' : ''}`);
 
     if (!health.database) {
-        console.log('   ⚠️ Database connection failed!');
+        console.log('    Database connection failed!');
     }
     if (!health.pgvector) {
-        console.log('   ⚠️ pgvector extension not installed!');
+        console.log('    pgvector extension not installed!');
     }
 
     // 4. Retry Pattern
-    console.log('\n📌 4. Retry Pattern for Transient Errors');
+    console.log('\n 4. Retry Pattern for Transient Errors');
     
     async function ingestWithRetry(
         rag: any,
@@ -139,7 +139,7 @@ async function main() {
     void ingestWithRetry; // Mark as used
 
     // 5. Graceful Degradation
-    console.log('\n📌 5. Graceful Degradation Pattern');
+    console.log('\n 5. Graceful Degradation Pattern');
     
     async function searchWithFallback(
         rag: any,
@@ -154,7 +154,7 @@ async function main() {
             });
         } catch (error) {
             if (error instanceof RerankingError) {
-                console.log('   ⚠️ Reranking failed, falling back to basic search');
+                console.log('    Reranking failed, falling back to basic search');
                 // Fallback: hybrid without reranking
                 return await rag.search({
                     query,
@@ -164,7 +164,7 @@ async function main() {
             }
             
             // Further fallback: semantic only
-            console.log('   ⚠️ Hybrid failed, falling back to semantic search');
+            console.log('    Hybrid failed, falling back to semantic search');
             return await rag.search({
                 query,
                 mode: 'semantic',
@@ -178,7 +178,7 @@ async function main() {
     void searchWithFallback; // Mark as used
 
     // 6. Configuration Validation
-    console.log('\n📌 6. Configuration Validation');
+    console.log('\n 6. Configuration Validation');
     
     try {
         // This will throw ConfigurationError
@@ -188,7 +188,7 @@ async function main() {
         });
     } catch (error) {
         if (error instanceof ConfigurationError) {
-            console.log(`   ✅ Caught ConfigurationError:`);
+            console.log(`    Caught ConfigurationError:`);
             console.log(`      Message: ${error.message}`);
             console.log(`      Code: ${error.code}`);
         }
@@ -196,7 +196,9 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\n✅ Done!');
+    console.log('\\nDone!');
 }
 
 main().catch(console.error);
+
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 07 - Custom Engine
  * 
  * Advanced: Extend Context-RAG engines with custom logic.
@@ -17,12 +17,12 @@ import { IngestionEngine, type IngestionEngineDependencies } from '../src/engine
 import { RetrievalEngine, type RetrievalEngineDependencies } from '../src/engines/retrieval.engine.js';
 import { DiscoveryEngine } from '../src/engines/discovery.engine.js';
 import { ContextRAGFactory } from '../src/context-rag.factory.js';
-import { GeminiService } from '../src/services/gemini.service.js';
 import { PDFProcessor } from '../src/services/pdf.processor.js';
 import { createLogger } from '../src/utils/logger.js';
 import { RateLimiter } from '../src/utils/rate-limiter.js';
 import { createEmbeddingProvider } from '../src/providers/embedding-provider.factory.js';
 import { createReranker } from '../src/services/reranker.service.js';
+import { createLLMService, createLLMServiceFactory } from '../src/services/llm/llm.factory.js';
 import {
     DocumentRepository,
     BatchRepository,
@@ -47,7 +47,7 @@ class MetricsIngestionEngine extends IngestionEngine {
     async ingest(options: IngestOptions): Promise<IngestResult> {
         const startTime = Date.now();
         
-        console.log('📊 [METRICS] Starting ingestion...');
+        console.log(' [METRICS] Starting ingestion...');
         console.log(`   File: ${options.filename || 'unknown'}`);
 
         // Call parent implementation
@@ -61,7 +61,7 @@ class MetricsIngestionEngine extends IngestionEngine {
             (this.metrics.averageTimeMs * (this.metrics.totalIngestions - 1) + duration) 
             / this.metrics.totalIngestions;
 
-        console.log('📊 [METRICS] Ingestion complete:');
+        console.log(' [METRICS] Ingestion complete:');
         console.log(`   Duration: ${duration}ms`);
         console.log(`   Chunks created: ${result.chunkCount}`);
         console.log(`   Total ingestions: ${this.metrics.totalIngestions}`);
@@ -92,10 +92,11 @@ function createDependencies(config: any): {
     const rateLimiter = new RateLimiter(resolvedConfig.rateLimitConfig);
 
     // Create services
-    const geminiService = new GeminiService(resolvedConfig, rateLimiter, logger);
+    const llmService = createLLMService(resolvedConfig, logger);
+    const llmFactory = createLLMServiceFactory();
     const pdfProcessor = new PDFProcessor(logger);
     const embeddingProvider = createEmbeddingProvider(resolvedConfig, rateLimiter, logger);
-    const reranker = createReranker(resolvedConfig, geminiService, logger);
+    const reranker = createReranker(resolvedConfig, llmService, logger);
 
     // Create repositories
     const repositories = {
@@ -109,13 +110,14 @@ function createDependencies(config: any): {
         resolvedConfig,
         logger,
         ingestionDeps: {
-            llm: geminiService,
+            llm: llmService,
+            llmFactory,
             pdfProcessor,
             embeddingProvider,
             repositories,
         },
         retrievalDeps: {
-            llm: geminiService,
+            llm: llmService,
             embeddingProvider,
             chunkRepo: repositories.chunk,
             reranker,
@@ -128,7 +130,7 @@ function createDependencies(config: any): {
 // ==============================================
 
 async function main() {
-    console.log('🔧 Context-RAG Custom Engine Example\n');
+    console.log('Context-RAG Custom Engine Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient() as any;
@@ -143,7 +145,7 @@ async function main() {
     const { resolvedConfig, ingestionDeps, retrievalDeps, logger } = createDependencies(config);
 
     // Create custom ingestion engine
-    console.log('\n🔧 Creating custom MetricsIngestionEngine...');
+    console.log('\\nCreating custom MetricsIngestionEngine...');
     const customIngestion = new MetricsIngestionEngine(
         resolvedConfig,
         ingestionDeps,
@@ -160,7 +162,7 @@ async function main() {
     );
 
     // Create ContextRAG with custom engine
-    console.log('🔧 Creating ContextRAG with injected custom engine...\n');
+    console.log('Creating ContextRAG with injected custom engine...\n');
     
     const contextRAGDeps: ContextRAGDependencies = {
         ingestionEngine: customIngestion,
@@ -176,7 +178,7 @@ async function main() {
     const rag = new ContextRAG(config, contextRAGDeps);
 
     // Test the custom engine
-    console.log('📥 Testing ingestion with custom engine...\n');
+    console.log('Testing ingestion with custom engine...\n');
     
     try {
         await rag.ingest({
@@ -190,10 +192,12 @@ async function main() {
 
     // Get metrics from custom engine
     const metrics = customIngestion.getMetrics();
-    console.log('\n📊 Final Metrics:', metrics);
+    console.log('\\nFinal Metrics:', metrics);
 
     await prisma.$disconnect();
-    console.log('\n✅ Done!');
+    console.log('\\nDone!');
 }
 
 main().catch(console.error);
+
+

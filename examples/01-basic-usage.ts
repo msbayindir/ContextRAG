@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 01 - Basic Usage
  * 
  * The simplest way to use Context-RAG:
@@ -15,7 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function main() {
-    console.log('📚 Context-RAG Basic Usage Example\n');
+    console.log('Context-RAG Basic Usage Example\n');
     console.log('='.repeat(50));
 
     // 1. Initialize
@@ -26,14 +26,17 @@ async function main() {
         geminiApiKey: process.env.GEMINI_API_KEY!,
         // Optional: customize model
         model: 'gemini-2.5-flash',
+        // If using OpenAI/Anthropic as primary LLM, set:
+        // llmProvider: { provider: 'openai' | 'anthropic', apiKey: '...' }
+        // documentProvider: { provider: 'gemini' }
     });
 
     // 2. Health check
     const health = await rag.healthCheck();
-    console.log('\n✅ Health Check:', health.status);
+    console.log('\nHealth Check:', health.status);
 
     // 3. Ingest a document
-    console.log('\n📥 Ingesting document...');
+    console.log('\nIngesting document...');
     
     const pdfPath = path.join(__dirname, 'test.pdf');
     const pdfBuffer = fs.readFileSync(pdfPath);
@@ -46,19 +49,19 @@ async function main() {
         },
     });
 
-    console.log(`\n✅ Ingested: ${result.chunkCount} chunks created`);
+    console.log(`\nIngested: ${result.chunkCount} chunks created`);
     console.log(`   Document ID: ${result.documentId}`);
     console.log(`   Processing time: ${result.processingMs}ms`);
 
     // 4. Search
-    console.log('\n🔍 Searching...');
+    console.log('\nSearching...');
     
     const searchResults = await rag.search({
         query: 'What is the main topic of this document?',
         limit: 3,
     });
 
-    console.log(`\n📋 Found ${searchResults.length} results:\n`);
+    console.log(`\nFound ${searchResults.length} results:\n`);
     
     searchResults.forEach((r, i) => {
         console.log(`${i + 1}. [Score: ${r.score.toFixed(3)}]`);
@@ -68,7 +71,9 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('✅ Done!');
+    console.log('Done!');
 }
 
 main().catch(console.error);
+
+

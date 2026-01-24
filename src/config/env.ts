@@ -37,13 +37,22 @@ const envSchema = z.object({
         .describe('Cohere API key for reranking and embeddings'),
 
     /**
-     * OpenAI API key for embeddings (optional)
+     * OpenAI API key for embeddings and LLM usage (optional)
      * Get yours at: https://platform.openai.com/api-keys
      */
     OPENAI_API_KEY: z
         .string()
         .optional()
         .describe('OpenAI API key for embeddings'),
+
+    /**
+     * Anthropic API key for LLM (optional)
+     * Get yours at: https://console.anthropic.com/settings/keys
+     */
+    ANTHROPIC_API_KEY: z
+        .string()
+        .optional()
+        .describe('Anthropic API key for LLM usage'),
 });
 
 /**
@@ -93,9 +102,13 @@ export function hasEnv(key: keyof Env): boolean {
 export function getEnvInfo(): {
     logLevel: string;
     cohereConfigured: boolean;
+    openaiConfigured: boolean;
+    anthropicConfigured: boolean;
 } {
     return {
         logLevel: env.LOG_LEVEL,
         cohereConfigured: hasEnv('COHERE_API_KEY'),
+        openaiConfigured: hasEnv('OPENAI_API_KEY'),
+        anthropicConfigured: hasEnv('ANTHROPIC_API_KEY'),
     };
 }

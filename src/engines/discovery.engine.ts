@@ -3,7 +3,7 @@ import type {
     DiscoveryResult,
     DiscoveryOptions,
 } from '../types/discovery.types.js';
-import type { ILLMService } from '../types/llm-service.types.js';
+import type { IDocumentLLMService, IStructuredLLMService } from '../types/llm-service.types.js';
 import type { IPDFProcessor } from '../types/pdf-processor.types.js';
 import type { Logger } from '../utils/logger.js';
 import { generateCorrelationId } from '../errors/index.js';
@@ -37,7 +37,7 @@ interface DiscoverySession {
  * ```
  */
 export class DiscoveryEngine {
-    private readonly llm: ILLMService;
+    private readonly llm: IDocumentLLMService & IStructuredLLMService;
     private readonly pdfProcessor: IPDFProcessor;
     private readonly logger: Logger;
     private readonly sessions: Map<string, DiscoverySession> = new Map();
@@ -52,7 +52,7 @@ export class DiscoveryEngine {
     constructor(
         // @ts-expect-error Reserved for future configuration-based features
         private readonly config: ResolvedConfig,
-        llm: ILLMService,
+        llm: IDocumentLLMService & IStructuredLLMService,
         pdfProcessor: IPDFProcessor,
         logger: Logger
     ) {

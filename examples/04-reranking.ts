@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 04 - Reranking
  * 
  * Reranking improves search relevance by re-scoring candidates using AI.
@@ -15,17 +15,18 @@ import { createContextRAG } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 
 async function main() {
-    console.log('🎯 Context-RAG Reranking Example\n');
+    console.log('Context-RAG Reranking Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient();
 
     // Option 1: Gemini Reranking (free, uses your quota)
-    console.log('\n📌 Option 1: Gemini Reranking');
+    console.log('\nOption 1: Gemini Reranking');
     
     const ragGemini = createContextRAG({
         prisma,
         geminiApiKey: process.env.GEMINI_API_KEY!,
+        // If using OpenAI/Anthropic as primary LLM, set llmProvider accordingly.
         rerankingConfig: {
             enabled: true,
             provider: 'gemini',
@@ -45,7 +46,7 @@ async function main() {
     });
 
     console.log(`\n   Query: "${query}"`);
-    console.log(`   Results (reranked with Gemini):`);
+    console.log('   Results (reranked with Gemini provider):');
     geminiResults.forEach((r, i) => {
         console.log(`   ${i + 1}. [Score: ${r.score.toFixed(3)}]`);
         console.log(`      Original Rank: ${r.explanation?.originalRank || 'N/A'}`);
@@ -53,7 +54,7 @@ async function main() {
     });
 
     // Option 2: Cohere Reranking (better quality)
-    console.log('\n📌 Option 2: Cohere Reranking');
+    console.log('\nOption 2: Cohere Reranking');
     
     if (process.env.COHERE_API_KEY) {
         const ragCohere = createContextRAG({
@@ -79,12 +80,12 @@ async function main() {
             console.log(`   ${i + 1}. [Score: ${r.score.toFixed(3)}] ${r.chunk.displayContent.slice(0, 80)}...`);
         });
     } else {
-        console.log('   ⚠️ COHERE_API_KEY not set. Skipping Cohere example.');
+        console.log('   COHERE_API_KEY not set. Skipping Cohere example.');
         console.log('   Get free API key at: https://cohere.com/');
     }
 
     // Option 3: Per-query reranking control
-    console.log('\n📌 Option 3: Per-Query Reranking Control');
+    console.log('\nOption 3: Per-Query Reranking Control');
     
     // Disable reranking for a specific query
     const fastResults = await ragGemini.search({
@@ -105,11 +106,13 @@ async function main() {
         rerankCandidates: 100,  // Get more candidates
     });
 
-    console.log(`   Custom reranking (100 candidates → 3): ${customResults.length} results`);
+    console.log(`   Custom reranking (100 candidates to 3): ${customResults.length} results`);
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\n✅ Done!');
+    console.log('\nDone!');
 }
 
 main().catch(console.error);
+
+

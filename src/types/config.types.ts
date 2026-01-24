@@ -122,6 +122,19 @@ export interface EmbeddingConfig {
 }
 
 /**
+ * LLM provider configuration
+ * Enables switching between different LLM providers
+ */
+export interface LLMProviderConfig {
+    /** Provider type: 'gemini' | 'openai' | 'anthropic' */
+    provider: 'gemini' | 'openai' | 'anthropic';
+    /** API key for the provider (falls back to env or geminiApiKey) */
+    apiKey?: string;
+    /** Model name for generation */
+    model?: string;
+}
+
+/**
  * Chunk type mapping for custom extraction types
  * Maps custom types (from user prompts) to system types
  * Example: { 'RECIPE': 'TEXT', 'INGREDIENT': 'LIST' }
@@ -188,6 +201,18 @@ export interface ContextRAGConfig {
      * @example { provider: 'openai', model: 'text-embedding-3-large' }
      */
     embeddingProvider?: EmbeddingConfig;
+
+    /**
+     * LLM provider configuration (default: Gemini)
+     * Allows switching between different LLM providers for text generation
+     */
+    llmProvider?: LLMProviderConfig;
+
+    /**
+     * Document LLM provider configuration (default: llmProvider)
+     * Allows using a dedicated provider for PDF/document processing
+     */
+    documentProvider?: LLMProviderConfig;
 }
 
 /**
@@ -208,6 +233,10 @@ export interface ResolvedConfig {
     rerankingConfig: RerankingConfig;
     /** Custom chunk type mapping (optional) */
     chunkTypeMapping?: ChunkTypeMapping;
+    /** LLM provider configuration */
+    llmProvider: LLMProviderConfig;
+    /** Document LLM provider configuration */
+    documentProvider: LLMProviderConfig;
 }
 
 /**
@@ -252,12 +281,28 @@ export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
     provider: 'gemini',
     model: 'text-embedding-004',
 };
+/**
+ * Default LLM provider configuration
+ */
+export const DEFAULT_LLM_PROVIDER: LLMProviderConfig = {
+    provider: 'gemini',
+};
 
 /**
  * Zod schema for config validation
  */
 export const configSchema = z.object({
     geminiApiKey: z.string().min(1, 'Gemini API key is required'),
+    llmProvider: z.object({
+        provider: z.enum(['gemini', 'openai', 'anthropic']),
+        apiKey: z.string().optional(),
+        model: z.string().optional(),
+    }).optional(),
+    documentProvider: z.object({
+        provider: z.enum(['gemini', 'openai', 'anthropic']),
+        apiKey: z.string().optional(),
+        model: z.string().optional(),
+    }).optional(),
     model: z.enum([
         'gemini-1.5-pro',
         'gemini-1.5-flash',

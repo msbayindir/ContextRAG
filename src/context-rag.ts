@@ -1,6 +1,7 @@
 import type {
     ContextRAGConfig,
     ResolvedConfig,
+    LLMProviderConfig,
 } from './types/config.types.js';
 import type {
     DiscoveryResult,
@@ -33,6 +34,7 @@ import {
     DEFAULT_GENERATION_CONFIG,
     DEFAULT_LOG_CONFIG,
     DEFAULT_RERANKING_CONFIG,
+    DEFAULT_LLM_PROVIDER,
 } from './types/config.types.js';
 import { ConfigurationError, NotFoundError } from './errors/index.js';
 import { createLogger } from './utils/index.js';
@@ -179,6 +181,26 @@ export class ContextRAG {
      * Resolve user config with defaults
      */
     private resolveConfig(userConfig: ContextRAGConfig): ResolvedConfig {
+        const resolveProvider = (provider?: LLMProviderConfig): LLMProviderConfig => {
+            const resolved: LLMProviderConfig = {
+                ...DEFAULT_LLM_PROVIDER,
+                ...provider,
+            };
+
+            if (resolved.provider === 'gemini') {
+                return {
+                    ...resolved,
+                    apiKey: resolved.apiKey ?? userConfig.geminiApiKey,
+                    model: resolved.model ?? (userConfig.model ?? 'gemini-1.5-pro'),
+                };
+            }
+
+            return resolved;
+        };
+
+        const llmProvider = resolveProvider(userConfig.llmProvider);
+        const documentProvider = resolveProvider(userConfig.documentProvider ?? userConfig.llmProvider);
+
         return {
             prisma: userConfig.prisma,
             geminiApiKey: userConfig.geminiApiKey,
@@ -213,6 +235,8 @@ export class ContextRAG {
                 ...userConfig.rerankingConfig,
             },
             chunkTypeMapping: userConfig.chunkTypeMapping,
+            llmProvider,
+            documentProvider,
         };
     }
 

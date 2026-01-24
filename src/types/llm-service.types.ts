@@ -1,6 +1,7 @@
 import type { Part } from '@google/generative-ai';
 import type { z } from 'zod';
 import type { TokenUsage } from './chunk.types.js';
+import type { ResolvedConfig } from './config.types.js';
 
 /**
  * LLM generation options
@@ -35,25 +36,9 @@ export interface LLMStructuredResult<T> {
 }
 
 /**
- * Generic LLM Service Interface
- * 
- * Abstraction over language model providers (Gemini, OpenAI, Anthropic, etc.)
- * Allows swapping LLM providers without changing consumer code.
- * 
- * @example
- * ```typescript
- * // Using the interface
- * class MyEngine {
- *   constructor(private llm: ILLMService) {}
- *   
- *   async process() {
- *     const response = await this.llm.generate('System prompt', 'User input');
- *     return response.text;
- *   }
- * }
- * ```
+ * Text generation capabilities
  */
-export interface ILLMService {
+export interface ITextLLMService {
     /**
      * Generate text content with system and user prompts
      * @param systemPrompt - System/context prompt
@@ -87,6 +72,12 @@ export interface ILLMService {
      * @returns Generated text
      */
     generateSimple(prompt: string): Promise<string>;
+}
+
+/**
+ * Reranking generation capability
+ */
+export interface IRerankLLMService {
 
     /**
      * Generate text optimized for reranking tasks
@@ -95,6 +86,12 @@ export interface ILLMService {
      * @returns Generated ranking text
      */
     generateForReranking(prompt: string): Promise<string>;
+}
+
+/**
+ * Document upload and document-based generation capability
+ */
+export interface IDocumentLLMService {
 
     /**
      * Upload a document buffer to the LLM provider
@@ -118,6 +115,12 @@ export interface ILLMService {
         prompt: string,
         options?: LLMGenerateOptions
     ): Promise<LLMResponse>;
+}
+
+/**
+ * Structured generation capability
+ */
+export interface IStructuredLLMService {
 
     /**
      * Generate and validate structured data from text prompt
@@ -148,4 +151,22 @@ export interface ILLMService {
         schema: z.ZodType<T, any, any>,
         options?: LLMGenerateOptions
     ): Promise<LLMStructuredResult<T>>;
+}
+
+/**
+ * Generic LLM Service Interface
+ * 
+ * Full provider contract. Prefer narrower capability interfaces for DI.
+ */
+export interface ILLMService
+    extends ITextLLMService,
+        IRerankLLMService,
+        IDocumentLLMService,
+        IStructuredLLMService { }
+
+/**
+ * Factory for creating LLM services from resolved config
+ */
+export interface ILLMServiceFactory {
+    create(config: ResolvedConfig): ILLMService;
 }

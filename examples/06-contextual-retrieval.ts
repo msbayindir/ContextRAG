@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 06 - Contextual Retrieval
  * 
  * Implements Anthropic's Contextual Retrieval approach.
@@ -20,7 +20,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function main() {
-    console.log('🧠 Context-RAG Contextual Retrieval Example\n');
+    console.log('Context-RAG Contextual Retrieval Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient();
@@ -28,7 +28,7 @@ async function main() {
     const pdfBuffer = fs.readFileSync(pdfPath);
 
     // Strategy 1: No Context (Baseline)
-    console.log('\n📌 Strategy 1: No Context (Baseline)');
+    console.log('\\nStrategy 1: No Context (Baseline)');
     
     const ragNone = createContextRAG({
         prisma,
@@ -44,10 +44,10 @@ async function main() {
         onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
     });
 
-    console.log(`   ✅ Baseline: ${baselineResult.chunkCount} chunks (no context)`);
+    console.log(`    Baseline: ${baselineResult.chunkCount} chunks (no context)`);
 
     // Strategy 2: Simple Context (Free)
-    console.log('\n📌 Strategy 2: Simple Context (Template-based, Free)');
+    console.log('\\nStrategy 2: Simple Context (Template-based, Free)');
     
     const ragSimple = createContextRAG({
         prisma,
@@ -64,10 +64,10 @@ async function main() {
         onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
     });
 
-    console.log(`   ✅ Simple: ${simpleResult.chunkCount} chunks (template context)`);
+    console.log(`    Simple: ${simpleResult.chunkCount} chunks (template context)`);
 
     // Strategy 3: LLM Context (Best Quality)
-    console.log('\n📌 Strategy 3: LLM Context (AI-generated, Best Quality)');
+    console.log('\\nStrategy 3: LLM Context (AI-generated, Best Quality)');
     
     const ragLLM = createContextRAG({
         prisma,
@@ -88,10 +88,10 @@ async function main() {
         onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
     });
 
-    console.log(`   ✅ LLM: ${llmResult.chunkCount} chunks (AI context)`);
+    console.log(`    LLM: ${llmResult.chunkCount} chunks (AI context)`);
 
     // Compare search results
-    console.log('\n🔍 Comparing Search Quality...');
+    console.log('\\nComparing Search Quality...');
     
     const query = 'What does the inhibitor block?';
     console.log(`   Query: "${query}"`);
@@ -115,7 +115,9 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\n✅ Done!');
+    console.log('\\nDone!');
 }
 
 main().catch(console.error);
+
+

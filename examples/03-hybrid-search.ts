@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 03 - Hybrid Search
  * 
  * Demonstrates different search modes:
@@ -13,7 +13,7 @@ import { createContextRAG } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 
 async function main() {
-    console.log('🔎 Context-RAG Hybrid Search Example\n');
+    console.log('Context-RAG Hybrid Search Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient();
@@ -26,7 +26,7 @@ async function main() {
     const query = 'metabolic pathways and energy production';
 
     // 1. Semantic Search (Vector)
-    console.log('\n🧠 1. Semantic Search:');
+    console.log('\n 1. Semantic Search:');
     console.log(`   Query: "${query}"`);
     
     const semanticResults = await rag.search({
@@ -41,7 +41,7 @@ async function main() {
     });
 
     // 2. Keyword Search (Full-text)
-    console.log('\n📝 2. Keyword Search:');
+    console.log('\n 2. Keyword Search:');
     console.log(`   Query: "${query}"`);
     
     const keywordResults = await rag.search({
@@ -56,7 +56,7 @@ async function main() {
     });
 
     // 3. Hybrid Search (Combined)
-    console.log('\n⚡ 3. Hybrid Search (Recommended):');
+    console.log('\n 3. Hybrid Search (Recommended):');
     console.log(`   Query: "${query}"`);
     
     const hybridResults = await rag.search({
@@ -71,7 +71,7 @@ async function main() {
     });
 
     // 4. Filtered Search
-    console.log('\n🎯 4. Filtered Search (by chunk type):');
+    console.log('\n 4. Filtered Search (by chunk type):');
     
     const filteredResults = await rag.search({
         query,
@@ -88,7 +88,7 @@ async function main() {
     });
 
     // 5. Type Boosting
-    console.log('\n📊 5. Type Boosting (prioritize tables):');
+    console.log('\n 5. Type Boosting (prioritize tables):');
     
     const boostedResults = await rag.search({
         query,
@@ -107,7 +107,9 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\n✅ Done!');
+    console.log('\\nDone!');
 }
 
 main().catch(console.error);
+
+

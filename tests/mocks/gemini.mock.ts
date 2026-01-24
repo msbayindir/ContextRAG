@@ -53,7 +53,16 @@ export function createMockGeminiService(): MockGeminiService {
         generateWithFileRef: vi.fn().mockResolvedValue('Mock file ref response'),
 
         // PDF operations
+        uploadDocument: vi.fn().mockResolvedValue('files/mock-file-id-12345'),
         uploadPdfBuffer: vi.fn().mockResolvedValue('files/mock-file-id-12345'),
+
+        generateWithDocument: vi.fn().mockResolvedValue({
+            text: `<!-- SECTION type="TEXT" page="1" confidence="0.92" -->
+Mock extracted content from PDF.
+This is a sample paragraph that was extracted.
+<!-- /SECTION -->`,
+            tokenUsage: { input: 500, output: 200, total: 700 },
+        } as GeminiResponse),
 
         generateWithPdfUri: vi.fn().mockResolvedValue({
             text: `<!-- SECTION type="TEXT" page="1" confidence="0.92" -->
@@ -100,6 +109,18 @@ This is a sample paragraph that was extracted.
             tokenUsage: { ...DEFAULT_TOKEN_USAGE },
         }),
 
+        generateStructuredWithDocument: vi.fn().mockResolvedValue({
+            data: [
+                {
+                    type: 'TEXT',
+                    page: 1,
+                    confidence: 0.92,
+                    content: 'Mock extracted content from structured output.',
+                },
+            ],
+            tokenUsage: { input: 500, output: 200, total: 700 },
+        }),
+
         generateStructuredWithPdf: vi.fn().mockResolvedValue({
             data: [
                 {
@@ -138,6 +159,11 @@ export function createMockGeminiWithSections(sections: Array<{
 }>): MockGeminiService {
     const mock = createMockGeminiService();
 
+    mock.generateStructuredWithDocument.mockResolvedValue({
+        data: sections,
+        tokenUsage: { input: 500, output: 200, total: 700 },
+    });
+
     mock.generateStructuredWithPdf.mockResolvedValue({
         data: sections,
         tokenUsage: { input: 500, output: 200, total: 700 },
@@ -154,6 +180,16 @@ export function createMockGeminiWithRateLimit(): MockGeminiService {
 
     // First call fails with rate limit, subsequent calls succeed
     let callCount = 0;
+    mock.generateWithDocument.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+            return Promise.reject(new Error('429 Too Many Requests'));
+        }
+        return Promise.resolve({
+            text: 'Success after retry',
+            tokenUsage: { input: 100, output: 50, total: 150 },
+        });
+    });
     mock.generateWithPdfUri.mockImplementation(() => {
         callCount++;
         if (callCount === 1) {

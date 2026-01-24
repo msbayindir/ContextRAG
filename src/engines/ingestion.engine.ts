@@ -8,7 +8,7 @@ import type {
 } from '../types/ingestion.types.js';
 import type { ProcessingWarning } from '../errors/index.js';
 import type { TokenUsage } from '../types/chunk.types.js';
-import type { ILLMService } from '../types/llm-service.types.js';
+import type { IDocumentLLMService, IStructuredLLMService, ITextLLMService, ILLMServiceFactory } from '../types/llm-service.types.js';
 import type { IPDFProcessor } from '../types/pdf-processor.types.js';
 import type { 
     IDocumentRepository, 
@@ -25,7 +25,6 @@ import {
 import { createEnhancementHandler } from '../enhancements/enhancement-registry.js';
 import type { EnhancementHandler } from '../types/rag-enhancement.types.js';
 import { BatchProcessor } from './ingestion/batch.processor.js';
-import { GeminiService } from '../services/gemini.service.js';
 
 /**
  * Dependencies required for IngestionEngine
@@ -50,7 +49,9 @@ import { GeminiService } from '../services/gemini.service.js';
  */
 export interface IngestionEngineDependencies {
     /** LLM service for AI operations (content extraction, chunk generation) */
-    llm: ILLMService;
+    llm: IDocumentLLMService & IStructuredLLMService & ITextLLMService;
+    /** LLM service factory for alternate model creation */
+    llmFactory: ILLMServiceFactory;
     /** PDF processor service for loading and batching PDF files */
     pdfProcessor: IPDFProcessor;
     /** Embedding provider for generating vector embeddings */
@@ -106,7 +107,7 @@ export interface IngestionEngineDependencies {
  */
 export class IngestionEngine {
     private readonly config: ResolvedConfig;
-    private readonly llm: ILLMService;
+    private readonly llm: IDocumentLLMService & IStructuredLLMService & ITextLLMService;
     private readonly pdfProcessor: IPDFProcessor;
     private readonly documentRepo: IDocumentRepository;
     private readonly batchRepo: IBatchRepository;
@@ -136,22 +137,22 @@ export class IngestionEngine {
         this.promptConfigRepo = dependencies.repositories.promptConfig;
         this.logger = logger;
 
-        // Enhancement handler needs GeminiService for now (will be refactored later)
-        const geminiService = dependencies.llm as GeminiService;
         this.enhancementHandler = createEnhancementHandler(
             config.ragEnhancement,
             config,
-            geminiService
+            dependencies.llm,
+            dependencies.llmFactory,
+            logger
         );
 
         this.batchProcessor = new BatchProcessor(
             config,
-            geminiService,
+            dependencies.llm,
             dependencies.embeddingProvider,
             this.enhancementHandler,
-            this.batchRepo as any,
-            this.chunkRepo as any,
-            this.documentRepo as any,
+            this.batchRepo,
+            this.chunkRepo,
+            this.documentRepo,
             logger
         );
     }

@@ -1,6 +1,6 @@
 
 import { ContextRAG } from './context-rag.js';
-import type { ContextRAGConfig, ResolvedConfig } from './types/config.types.js';
+import type { ContextRAGConfig, ResolvedConfig, LLMProviderConfig } from './types/config.types.js';
 import {
     DEFAULT_BATCH_CONFIG,
     DEFAULT_CHUNK_CONFIG,
@@ -8,10 +8,10 @@ import {
     DEFAULT_GENERATION_CONFIG,
     DEFAULT_LOG_CONFIG,
     DEFAULT_RERANKING_CONFIG,
+    DEFAULT_LLM_PROVIDER,
 } from './types/config.types.js';
 import { createLogger } from './utils/index.js';
 import { RateLimiter } from './utils/rate-limiter.js';
-import { GeminiService } from './services/gemini.service.js';
 import { createEmbeddingProvider } from './providers/embedding-provider.factory.js';
 import {
     DocumentRepository,
@@ -24,8 +24,9 @@ import { RetrievalEngine, type RetrievalEngineDependencies } from './engines/ret
 import { DiscoveryEngine } from './engines/discovery.engine.js';
 import { PDFProcessor } from './services/pdf.processor.js';
 import { createReranker } from './services/reranker.service.js';
-import type { ILLMService } from './types/llm-service.types.js';
+import type { ILLMService, ILLMServiceFactory } from './types/llm-service.types.js';
 import type { IPDFProcessor } from './types/pdf-processor.types.js';
+import { createLLMService, createLLMServiceFactory } from './services/llm/llm.factory.js';
 
 /**
  * Factory for creating ContextRAG instances with proper dependency injection
@@ -58,10 +59,11 @@ export class ContextRAGFactory {
         const rateLimiter = new RateLimiter(config.rateLimitConfig);
 
         // Core Services (implementing interfaces)
-        const llmService: ILLMService = new GeminiService(config, rateLimiter, logger);
+        const llmService: ILLMService = createLLMService(config, logger);
         const embeddingProvider = createEmbeddingProvider(config, rateLimiter, logger);
         const pdfProcessor: IPDFProcessor = new PDFProcessor(logger);
-        const reranker = createReranker(config, llmService as GeminiService, logger);
+        const reranker = createReranker(config, llmService, logger);
+        const llmFactory: ILLMServiceFactory = createLLMServiceFactory();
 
         // Repositories (implementing interfaces)
         const repositories = {
@@ -74,6 +76,7 @@ export class ContextRAGFactory {
         // Build dependencies for engines
         const ingestionDeps: IngestionEngineDependencies = {
             llm: llmService,
+            llmFactory,
             pdfProcessor,
             embeddingProvider,
             repositories,
@@ -107,6 +110,26 @@ export class ContextRAGFactory {
      * Resolve user config with defaults
      */
     private static resolveConfig(userConfig: ContextRAGConfig): ResolvedConfig {
+        const resolveProvider = (provider?: LLMProviderConfig): LLMProviderConfig => {
+            const resolved: LLMProviderConfig = {
+                ...DEFAULT_LLM_PROVIDER,
+                ...provider,
+            };
+
+            if (resolved.provider === 'gemini') {
+                return {
+                    ...resolved,
+                    apiKey: resolved.apiKey ?? userConfig.geminiApiKey,
+                    model: resolved.model ?? (userConfig.model ?? 'gemini-1.5-pro'),
+                };
+            }
+
+            return resolved;
+        };
+
+        const llmProvider = resolveProvider(userConfig.llmProvider);
+        const documentProvider = resolveProvider(userConfig.documentProvider ?? userConfig.llmProvider);
+
         return {
             prisma: userConfig.prisma,
             geminiApiKey: userConfig.geminiApiKey,
@@ -140,6 +163,8 @@ export class ContextRAGFactory {
                 ...userConfig.rerankingConfig,
             },
             chunkTypeMapping: userConfig.chunkTypeMapping,
+            llmProvider,
+            documentProvider,
         };
     }
 }

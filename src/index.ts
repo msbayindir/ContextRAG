@@ -11,6 +11,11 @@ export { ContextRAGFactory, createContextRAG } from './context-rag.factory.js';
 // Service Interfaces (v2.0)
 export type {
     ILLMService,
+    ITextLLMService,
+    IRerankLLMService,
+    IDocumentLLMService,
+    IStructuredLLMService,
+    ILLMServiceFactory,
     LLMGenerateOptions,
     LLMResponse,
     LLMStructuredResult,
@@ -45,6 +50,7 @@ export type {
     RerankingConfig,
     GenerationConfig,
     LogConfig,
+    LLMProviderConfig,
     ResolvedConfig,
 } from './types/config.types.js';
 

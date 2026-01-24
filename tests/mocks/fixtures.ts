@@ -291,6 +291,16 @@ export function createMockResolvedConfig(overrides?: Partial<ResolvedConfig>): R
             defaultCandidates: 50,
             defaultTopK: 10,
         },
+        llmProvider: {
+            provider: 'gemini',
+            apiKey: 'test-api-key',
+            model: 'gemini-1.5-flash',
+        },
+        documentProvider: {
+            provider: 'gemini',
+            apiKey: 'test-api-key',
+            model: 'gemini-1.5-flash',
+        },
         ...overrides,
     };
 }

@@ -3,10 +3,8 @@ import type { BatchResult, BatchStatus } from '../../types/ingestion.types.js';
 import type { CreateChunkInput } from '../../types/chunk.types.js';
 import type { ChunkTypeEnumType } from '../../types/enums.js';
 import { BatchStatusEnum } from '../../types/enums.js';
-import { BatchRepository } from '../../database/repositories/batch.repository.js';
-import { ChunkRepository } from '../../database/repositories/chunk.repository.js';
-import { DocumentRepository } from '../../database/repositories/document.repository.js';
-import { GeminiService } from '../../services/gemini.service.js';
+import type { IBatchRepository, IChunkRepository, IDocumentRepository } from '../../types/repository.types.js';
+import type { IDocumentLLMService, IStructuredLLMService } from '../../types/llm-service.types.js';
 import type { EmbeddingProvider } from '../../types/embedding-provider.types.js';
 import type { EnhancementHandler, DocumentContext, ChunkData } from '../../types/rag-enhancement.types.js';
 import type { Logger } from '../../utils/logger.js';
@@ -23,12 +21,12 @@ import {
 export class BatchProcessor {
     constructor(
         private readonly config: ResolvedConfig,
-        private readonly gemini: GeminiService,
+        private readonly llm: IDocumentLLMService & IStructuredLLMService,
         private readonly embeddingProvider: EmbeddingProvider,
         private readonly enhancementHandler: EnhancementHandler,
-        private readonly batchRepo: BatchRepository,
-        private readonly chunkRepo: ChunkRepository,
-        private readonly documentRepo: DocumentRepository,
+        private readonly batchRepo: IBatchRepository,
+        private readonly chunkRepo: IChunkRepository,
+        private readonly documentRepo: IDocumentRepository,
         private readonly logger: Logger
     ) { }
 
@@ -85,7 +83,7 @@ export class BatchProcessor {
                     // Try structured output first if enabled
                     if (useStructured) {
                         try {
-                            const structuredResponse = await this.gemini.generateStructuredWithPdf(
+                            const structuredResponse = await this.llm.generateStructuredWithDocument(
                                 context.fileUri,
                                 getPrompt(true),
                                 SectionArraySchema,
@@ -113,7 +111,7 @@ export class BatchProcessor {
                     }
 
                     // Fallback to legacy text generation
-                    return await this.gemini.generateWithPdfUri(
+                    return await this.llm.generateWithDocument(
                         context.fileUri,
                         getPrompt(false),
                         {

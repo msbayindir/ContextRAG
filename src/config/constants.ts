@@ -33,7 +33,7 @@ export const GENERATION_DEFAULTS = {
     },
 
     /**
-     * Context generation with PDF (generateWithPdfUri, generateWithFileRef)
+     * Context generation with PDF (generateWithDocument)
      */
     PDF_CONTEXT: {
         temperature: 0.3,

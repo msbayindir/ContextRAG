@@ -11,7 +11,8 @@ import type {
     DocumentContext
 } from '../types/rag-enhancement.types.js';
 import type { ResolvedConfig } from '../types/config.types.js';
-import type { GeminiService } from '../services/gemini.service.js';
+import type { IDocumentLLMService, ITextLLMService, ILLMServiceFactory } from '../types/llm-service.types.js';
+import type { Logger } from '../utils/logger.js';
 import { ConfigurationError } from '../errors/index.js';
 import { NoOpHandler } from './no-op.handler.js';
 import { AnthropicHandler } from './anthropic/anthropic.handler.js';
@@ -21,8 +22,10 @@ import { AnthropicHandler } from './anthropic/anthropic.handler.js';
  */
 export function createEnhancementHandler(
     config: RagEnhancementConfig | undefined,
-    _resolvedConfig: ResolvedConfig,
-    gemini: GeminiService
+    resolvedConfig: ResolvedConfig,
+    llm: IDocumentLLMService & ITextLLMService,
+    llmFactory: ILLMServiceFactory,
+    logger: Logger
 ): EnhancementHandler {
 
     if (!config || config.approach === 'none') {
@@ -31,7 +34,7 @@ export function createEnhancementHandler(
 
     switch (config.approach) {
         case 'anthropic_contextual':
-            return new AnthropicHandler(config, gemini, _resolvedConfig);
+            return new AnthropicHandler(config, llm, resolvedConfig, llmFactory, logger);
 
         case 'google_grounding':
             // Future implementation

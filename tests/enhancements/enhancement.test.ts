@@ -63,15 +63,20 @@ describe('Enhancement Handlers', () => {
         it('should create NoOpHandler when config is undefined', async () => {
             const { createEnhancementHandler } = await import('../../src/enhancements/enhancement-registry.js');
             const { createMockResolvedConfig } = await import('../mocks/fixtures.js');
-            const { createMockGeminiService } = await import('../mocks/gemini.mock.js');
+            const { createMockLLMService } = await import('../mocks/gemini.mock.js');
+            const { createLogger } = await import('../../src/utils/index.js');
 
             const config = createMockResolvedConfig();
-            const mockGemini = createMockGeminiService();
+            const mockLlm = createMockLLMService();
+            const llmFactory = { create: () => mockLlm };
+            const logger = createLogger(config.logging);
 
             const handler = createEnhancementHandler(
                 undefined,
                 config,
-                mockGemini as any
+                mockLlm,
+                llmFactory,
+                logger
             );
 
             // Should be a NoOpHandler
@@ -84,15 +89,20 @@ describe('Enhancement Handlers', () => {
         it('should create NoOpHandler when approach is none', async () => {
             const { createEnhancementHandler } = await import('../../src/enhancements/enhancement-registry.js');
             const { createMockResolvedConfig } = await import('../mocks/fixtures.js');
-            const { createMockGeminiService } = await import('../mocks/gemini.mock.js');
+            const { createMockLLMService } = await import('../mocks/gemini.mock.js');
+            const { createLogger } = await import('../../src/utils/index.js');
 
             const config = createMockResolvedConfig();
-            const mockGemini = createMockGeminiService();
+            const mockLlm = createMockLLMService();
+            const llmFactory = { create: () => mockLlm };
+            const logger = createLogger(config.logging);
 
             const handler = createEnhancementHandler(
                 { approach: 'none' },
                 config,
-                mockGemini as any
+                mockLlm,
+                llmFactory,
+                logger
             );
 
             const result = await handler.generateContext(
@@ -107,15 +117,20 @@ describe('Enhancement Handlers', () => {
             const { createEnhancementHandler } = await import('../../src/enhancements/enhancement-registry.js');
             const { ConfigurationError } = await import('../../src/errors/index.js');
             const { createMockResolvedConfig } = await import('../mocks/fixtures.js');
-            const { createMockGeminiService } = await import('../mocks/gemini.mock.js');
+            const { createMockLLMService } = await import('../mocks/gemini.mock.js');
+            const { createLogger } = await import('../../src/utils/index.js');
 
             const config = createMockResolvedConfig();
-            const mockGemini = createMockGeminiService();
+            const mockLlm = createMockLLMService();
+            const llmFactory = { create: () => mockLlm };
+            const logger = createLogger(config.logging);
 
             expect(() => createEnhancementHandler(
                 { approach: 'google_grounding' as any },
                 config,
-                mockGemini as any
+                mockLlm,
+                llmFactory,
+                logger
             )).toThrow(ConfigurationError);
         });
     });

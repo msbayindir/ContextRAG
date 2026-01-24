@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 08 - Embedding Providers
  * 
  * Context-RAG supports multiple embedding providers:
@@ -15,7 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function main() {
-    console.log('🔢 Context-RAG Embedding Providers Example\n');
+    console.log('Context-RAG Embedding Providers Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient();
@@ -23,7 +23,7 @@ async function main() {
     const pdfBuffer = fs.readFileSync(pdfPath);
 
     // Provider 1: Gemini (Default)
-    console.log('\n📌 Provider 1: Gemini (Default)');
+    console.log('\\nProvider 1: Gemini (Default)');
     console.log('   Model: text-embedding-004');
     console.log('   Dimensions: 768');
     
@@ -39,10 +39,10 @@ async function main() {
         onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
     });
 
-    console.log(`   ✅ Ingested with Gemini: ${geminiResult.chunkCount} chunks`);
+    console.log(`    Ingested with Gemini: ${geminiResult.chunkCount} chunks`);
 
     // Provider 2: OpenAI
-    console.log('\n📌 Provider 2: OpenAI');
+    console.log('\\nProvider 2: OpenAI');
     
     if (process.env.OPENAI_API_KEY) {
         console.log('   Model: text-embedding-3-small');
@@ -64,13 +64,13 @@ async function main() {
             onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
         });
 
-        console.log(`   ✅ Ingested with OpenAI: ${openaiResult.chunkCount} chunks`);
+        console.log(`    Ingested with OpenAI: ${openaiResult.chunkCount} chunks`);
     } else {
-        console.log('   ⚠️ OPENAI_API_KEY not set. Skipping OpenAI example.');
+        console.log('    OPENAI_API_KEY not set. Skipping OpenAI example.');
     }
 
     // Provider 3: Cohere
-    console.log('\n📌 Provider 3: Cohere');
+    console.log('\\nProvider 3: Cohere');
     
     if (process.env.COHERE_API_KEY) {
         console.log('   Model: embed-multilingual-v3.0');
@@ -93,13 +93,13 @@ async function main() {
             onProgress: (s) => console.log(`   Batch ${s.current}/${s.total}`),
         });
 
-        console.log(`   ✅ Ingested with Cohere: ${cohereResult.chunkCount} chunks`);
+        console.log(`    Ingested with Cohere: ${cohereResult.chunkCount} chunks`);
     } else {
-        console.log('   ⚠️ COHERE_API_KEY not set. Skipping Cohere example.');
+        console.log('    COHERE_API_KEY not set. Skipping Cohere example.');
     }
 
     // Important: Dimension mismatch warning
-    console.log('\n⚠️ Important Notes:');
+    console.log('\n Important Notes:');
     console.log('   1. Each provider has different embedding dimensions');
     console.log('   2. pgvector column must match the dimension');
     console.log('   3. You cannot mix embeddings from different providers');
@@ -108,7 +108,9 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\n✅ Done!');
+    console.log('\\nDone!');
 }
 
 main().catch(console.error);
+
+

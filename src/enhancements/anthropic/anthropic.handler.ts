@@ -14,42 +14,49 @@ import type {
     DocumentContext
 } from '../../types/rag-enhancement.types.js';
 import { DEFAULT_ANTHROPIC_CONFIG as DEFAULTS } from '../../types/rag-enhancement.types.js';
-import { GeminiService } from '../../services/gemini.service.js';
 import type { ResolvedConfig } from '../../types/config.types.js';
-import { RateLimiter } from '../../utils/rate-limiter.js';
-import { createLogger, type Logger } from '../../utils/logger.js';
+import type { IDocumentLLMService, ITextLLMService, ILLMServiceFactory } from '../../types/llm-service.types.js';
+import type { Logger } from '../../utils/logger.js';
 import pLimit from 'p-limit';
 import { GENERATION_DEFAULTS } from '../../config/constants.js';
 
 export class AnthropicHandler implements EnhancementHandler {
     private readonly config: AnthropicContextualConfig;
-    private readonly gemini: GeminiService;
+    private readonly llm: IDocumentLLMService & ITextLLMService;
     private readonly limit: ReturnType<typeof pLimit>;
     private readonly skipTypes: Set<string>;
     private readonly logger: Logger;
 
     constructor(
         config: AnthropicContextualConfig,
-        mainGemini: GeminiService,
-        resolvedConfig: ResolvedConfig
+        mainLlm: IDocumentLLMService & ITextLLMService,
+        resolvedConfig: ResolvedConfig,
+        llmFactory: ILLMServiceFactory,
+        logger: Logger
     ) {
         this.config = config;
         this.limit = pLimit(config.concurrencyLimit ?? DEFAULTS.concurrencyLimit);
         this.skipTypes = new Set(config.skipChunkTypes ?? DEFAULTS.skipChunkTypes);
-        this.logger = createLogger(resolvedConfig.logging);
+        this.logger = logger;
 
-        // If a separate model is specified for enhancement, create a new GeminiService
+        // If a separate model is specified for enhancement, create a new LLM service
         if (config.model && config.model !== resolvedConfig.model) {
             this.logger.info('Using separate model for enhancement', { model: config.model });
             const enhancementConfig: ResolvedConfig = {
                 ...resolvedConfig,
                 model: config.model,
+                llmProvider: {
+                    ...resolvedConfig.llmProvider,
+                    model: config.model,
+                },
+                documentProvider: {
+                    ...resolvedConfig.documentProvider,
+                    model: config.model,
+                },
             };
-            const rateLimiter = new RateLimiter(resolvedConfig.rateLimitConfig);
-            const logger = createLogger(resolvedConfig.logging);
-            this.gemini = new GeminiService(enhancementConfig, rateLimiter, logger);
+            this.llm = llmFactory.create(enhancementConfig);
         } else {
-            this.gemini = mainGemini;
+            this.llm = mainLlm;
         }
     }
 
@@ -113,7 +120,7 @@ ${chunk.content}
         try {
             // If we have a cached PDF URI, use it for full document context
             if (doc.fileUri) {
-                const result = await this.gemini.generateWithPdfUri(doc.fileUri, structuredPrompt, {
+                const result = await this.llm.generateWithDocument(doc.fileUri, structuredPrompt, {
                     maxOutputTokens: GENERATION_DEFAULTS.CONTEXT_GENERATION.maxOutputTokens,
                     temperature: GENERATION_DEFAULTS.CONTEXT_GENERATION.temperature
                 });
@@ -121,7 +128,7 @@ ${chunk.content}
             }
 
             // Fallback without PDF context
-            const result = await this.gemini.generateSimple(structuredPrompt);
+            const result = await this.llm.generateSimple(structuredPrompt);
             return result.trim();
         } catch (error) {
             // On error, fall back to simple context

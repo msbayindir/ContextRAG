@@ -5,9 +5,9 @@
  * Supports multiple providers: Gemini (default) and Cohere.
  */
 
-import type { GeminiService } from './gemini.service.js';
 import type { ResolvedConfig } from '../types/config.types.js';
 import type { Logger } from '../utils/logger.js';
+import type { IRerankLLMService } from '../types/llm-service.types.js';
 import { RerankingError } from '../errors/index.js';
 import { z } from 'zod';
 import { SEARCH_DEFAULTS } from '../config/constants.js';
@@ -55,11 +55,11 @@ const GeminiRerankResponseSchema = z.array(z.object({
  * No additional API key required - uses existing Gemini quota.
  */
 export class GeminiReranker implements RerankerService {
-    private readonly gemini: GeminiService;
+    private readonly llm: IRerankLLMService;
     private readonly logger: Logger;
 
-    constructor(gemini: GeminiService, logger: Logger) {
-        this.gemini = gemini;
+    constructor(llm: IRerankLLMService, logger: Logger) {
+        this.llm = llm;
         this.logger = logger;
     }
 
@@ -103,7 +103,7 @@ OUTPUT FORMAT (return EXACTLY this structure):
 JSON RESPONSE:`;
 
         try {
-            const response = await this.gemini.generateForReranking(prompt);
+            const response = await this.llm.generateForReranking(prompt);
 
             this.logger.debug('Gemini rerank raw response', {
                 responseLength: response.length,
@@ -324,7 +324,7 @@ export class NoOpReranker implements RerankerService {
  */
 export function createReranker(
     config: ResolvedConfig,
-    gemini: GeminiService,
+    llm: IRerankLLMService,
     logger: Logger
 ): RerankerService {
     const rerankConfig = config.rerankingConfig;
@@ -337,12 +337,12 @@ export function createReranker(
         case 'cohere':
             if (!rerankConfig.cohereApiKey) {
                 logger.warn('Cohere API key not provided, falling back to Gemini reranker');
-                return new GeminiReranker(gemini, logger);
+                return new GeminiReranker(llm, logger);
             }
             return new CohereReranker(rerankConfig.cohereApiKey, logger);
 
         case 'gemini':
         default:
-            return new GeminiReranker(gemini, logger);
+            return new GeminiReranker(llm, logger);
     }
 }
