@@ -1,35 +1,24 @@
 import type { PrismaClientLike } from '../../types/config.types.js';
 import { BatchStatusEnum } from '../../types/enums.js';
 import type { TokenUsage } from '../../types/chunk.types.js';
+import type { 
+    IBatchRepository, 
+    CreateBatchInput, 
+    BatchRecord 
+} from '../../types/repository.types.js';
 import { DatabaseError, NotFoundError } from '../../errors/index.js';
 
-interface CreateBatchInput {
-    documentId: string;
-    batchIndex: number;
-    pageStart: number;
-    pageEnd: number;
-}
-
-interface BatchRecord {
-    id: string;
-    documentId: string;
-    batchIndex: number;
-    pageStart: number;
-    pageEnd: number;
-    status: string;
-    retryCount: number;
-    lastError?: string;
-    tokenUsage?: TokenUsage;
-    processingMs?: number;
-    startedAt?: Date;
-    completedAt?: Date;
-    createdAt: Date;
-}
+// Re-export types for backward compatibility
+export type { CreateBatchInput, BatchRecord };
 
 /**
  * Repository for Batch CRUD operations
+ * 
+ * Implements IBatchRepository interface for dependency injection.
+ * 
+ * @implements {IBatchRepository}
  */
-export class BatchRepository {
+export class BatchRepository implements IBatchRepository {
     constructor(private readonly prisma: PrismaClientLike) { }
 
     /**
@@ -183,6 +172,17 @@ export class BatchRepository {
                 completedAt: null,
             },
         });
+    }
+
+    /**
+     * Delete all batches for a document
+     * @implements IBatchRepository.deleteByDocument
+     */
+    async deleteByDocument(documentId: string): Promise<number> {
+        const result = await this.prisma.contextRagBatch.deleteMany({
+            where: { documentId },
+        });
+        return result.count;
     }
 
     /**

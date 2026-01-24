@@ -17,7 +17,7 @@
  *   npx tsx examples/demo.ts
  */
 
-import { ContextRAG, ConfigurationError, IngestionError, RerankingError } from '../src/index.js';
+import { createContextRAG, ConfigurationError, IngestionError, RerankingError } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -63,9 +63,9 @@ async function main() {
         process.exit(1);
     }
 
-    // Initialize Context-RAG
+    // Initialize Context-RAG using factory (v2.0)
     console.log('\n🔧 Initializing Context-RAG...');
-    const rag = new ContextRAG({
+    const rag = createContextRAG({
         // Cast generated PrismaClient to minimal interface
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         prisma: prisma as any,

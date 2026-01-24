@@ -23,6 +23,7 @@ import type {
     UpdatePromptConfig,
     PromptConfigFilters,
 } from './types/prompt.types.js';
+import type { IPromptConfigRepository, IDocumentRepository, IChunkRepository } from './types/repository.types.js';
 
 import {
     configSchema,
@@ -34,48 +35,93 @@ import {
     DEFAULT_RERANKING_CONFIG,
 } from './types/config.types.js';
 import { ConfigurationError, NotFoundError } from './errors/index.js';
-import { createLogger, RateLimiter } from './utils/index.js';
+import { createLogger } from './utils/index.js';
 import type { Logger } from './utils/logger.js';
-import {
-    PromptConfigRepository,
-    DocumentRepository,
-    ChunkRepository,
-} from './database/index.js';
 import {
     checkDatabaseConnection,
     checkPgVectorExtension,
     getDatabaseStats,
 } from './database/utils.js';
-import { createEmbeddingProvider } from './providers/embedding-provider.factory.js';
 import { IngestionEngine } from './engines/ingestion.engine.js';
 import { RetrievalEngine } from './engines/retrieval.engine.js';
 import { DiscoveryEngine } from './engines/discovery.engine.js';
 
 /**
- * Main Context-RAG engine class
- *
+ * Injected dependencies for ContextRAG
+ * 
+ * Required when using the factory pattern (v2.0+).
+ * This interface enforces explicit dependency injection following
+ * the Dependency Inversion Principle (DIP).
+ * 
+ * **Usage:**
+ * - Use `createContextRAG()` factory for automatic wiring
+ * - For custom engines, create dependencies manually
+ * 
  * @example
  * ```typescript
- * import { ContextRAG } from 'context-rag';
- * import { PrismaClient } from '@prisma/client';
+ * // Automatic wiring via factory
+ * const rag = createContextRAG(config);
+ * 
+ * // Manual wiring with custom engine
+ * const customDeps: ContextRAGDependencies = {
+ *   ingestionEngine: new CustomIngestionEngine(...),
+ *   retrievalEngine: new RetrievalEngine(...),
+ *   discoveryEngine: new DiscoveryEngine(...),
+ *   repos: {
+ *     promptConfig: promptConfigRepo,
+ *     document: documentRepo,
+ *     chunk: chunkRepo,
+ *   },
+ * };
+ * const rag = new ContextRAG(config, customDeps);
+ * ```
+ */
+export interface ContextRAGDependencies {
+    /** Ingestion engine for document processing and chunking */
+    ingestionEngine: IngestionEngine;
+    /** Retrieval engine for semantic and hybrid search */
+    retrievalEngine: RetrievalEngine;
+    /** Discovery engine for document analysis and strategy generation */
+    discoveryEngine: DiscoveryEngine;
+    /** Repository instances for database operations */
+    repos: {
+        /** Prompt configuration repository */
+        promptConfig: IPromptConfigRepository;
+        /** Document repository */
+        document: IDocumentRepository;
+        /** Chunk repository */
+        chunk: IChunkRepository;
+    };
+}
+
+/**
+ * Main Context-RAG engine class (Facade)
  *
- * const prisma = new PrismaClient();
- * const rag = new ContextRAG({
- *   prisma,
+ * ## v2.0 Usage (Recommended)
+ * Use `createContextRAG()` factory function for proper dependency injection:
+ * 
+ * @example
+ * ```typescript
+ * import { createContextRAG } from 'context-rag';
+ * 
+ * const rag = createContextRAG({
+ *   prisma: prismaClient,
  *   geminiApiKey: process.env.GEMINI_API_KEY!,
  * });
- *
+ * 
  * // Ingest a document
  * const result = await rag.ingest({ file: pdfBuffer });
- *
+ * 
  * // Search
  * const results = await rag.search({ query: 'your query' });
  * ```
+ * 
+ * ## Direct Instantiation (Deprecated in v2.0)
+ * Direct `new ContextRAG()` usage is deprecated. Use `createContextRAG()` instead.
  */
 export class ContextRAG {
     private readonly config: ResolvedConfig;
     private readonly logger: Logger;
-    private readonly rateLimiter: RateLimiter;
 
     // Engines
     private readonly ingestionEngine: IngestionEngine;
@@ -83,11 +129,22 @@ export class ContextRAG {
     private readonly discoveryEngine: DiscoveryEngine;
 
     // Repositories
-    private readonly promptConfigRepo: PromptConfigRepository;
-    private readonly documentRepo: DocumentRepository;
-    private readonly chunkRepo: ChunkRepository;
+    private readonly promptConfigRepo: IPromptConfigRepository;
+    private readonly documentRepo: IDocumentRepository;
+    private readonly chunkRepo: IChunkRepository;
 
-    constructor(userConfig: ContextRAGConfig) {
+    /**
+     * Create a new ContextRAG instance
+     * 
+     * @param userConfig - User configuration
+     * @param dependencies - Injected dependencies (required for v2.0)
+     * 
+     * @deprecated Direct instantiation is deprecated. Use `createContextRAG()` instead.
+     */
+    constructor(
+        userConfig: ContextRAGConfig,
+        dependencies: ContextRAGDependencies
+    ) {
         // Validate config
         const validation = configSchema.safeParse(userConfig);
         if (!validation.success) {
@@ -102,23 +159,17 @@ export class ContextRAG {
         // Initialize logger
         this.logger = createLogger(this.config.logging);
 
-        // Initialize rate limiter
-        this.rateLimiter = new RateLimiter(this.config.rateLimitConfig);
+        // Use injected dependencies
+        this.ingestionEngine = dependencies.ingestionEngine;
+        this.retrievalEngine = dependencies.retrievalEngine;
+        this.discoveryEngine = dependencies.discoveryEngine;
 
-        // Initialize embedding provider (modular architecture)
-        const embeddingProvider = createEmbeddingProvider(this.config, this.rateLimiter, this.logger);
+        // Use injected repositories
+        this.promptConfigRepo = dependencies.repos.promptConfig;
+        this.documentRepo = dependencies.repos.document;
+        this.chunkRepo = dependencies.repos.chunk;
 
-        // Initialize repositories
-        this.promptConfigRepo = new PromptConfigRepository(this.config.prisma);
-        this.documentRepo = new DocumentRepository(this.config.prisma);
-        this.chunkRepo = new ChunkRepository(this.config.prisma);
-
-        // Initialize engines
-        this.ingestionEngine = new IngestionEngine(this.config, embeddingProvider, this.rateLimiter, this.logger);
-        this.retrievalEngine = new RetrievalEngine(this.config, embeddingProvider, this.rateLimiter, this.logger);
-        this.discoveryEngine = new DiscoveryEngine(this.config, this.rateLimiter, this.logger);
-
-        this.logger.info('Context-RAG initialized', {
+        this.logger.info('Context-RAG initialized (v2.0)', {
             model: this.config.model,
             batchConfig: this.config.batchConfig,
         });
@@ -323,7 +374,7 @@ export class ContextRAG {
         this.logger.info('Deleting document', { documentId });
 
         // Delete chunks first
-        await this.chunkRepo.deleteByDocumentId(documentId);
+        await this.chunkRepo.deleteByDocument(documentId);
 
         // Delete document (will cascade delete batches)
         await this.documentRepo.delete(documentId);

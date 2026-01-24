@@ -1,17 +1,20 @@
 import type { PrismaClientLike } from '../../types/config.types.js';
 import type { VectorChunk, CreateChunkInput, ChunkType } from '../../types/chunk.types.js';
 import type { SearchFilters } from '../../types/search.types.js';
+import type { IChunkRepository, ChunkSearchResult } from '../../types/repository.types.js';
 import { DatabaseError } from '../../errors/index.js';
 
-interface ChunkSearchResult {
-    chunk: VectorChunk;
-    similarity: number;
-}
+// Re-export types for backward compatibility
+export type { ChunkSearchResult };
 
 /**
  * Repository for Chunk CRUD and search operations
+ * 
+ * Implements IChunkRepository interface for dependency injection.
+ * 
+ * @implements {IChunkRepository}
  */
-export class ChunkRepository {
+export class ChunkRepository implements IChunkRepository {
     constructor(private readonly prisma: PrismaClientLike) { }
 
     /**
@@ -232,6 +235,7 @@ export class ChunkRepository {
 
     /**
      * Get chunks by document ID
+     * @implements IChunkRepository.getByDocumentId
      */
     async getByDocumentId(documentId: string): Promise<VectorChunk[]> {
         const chunks = await this.prisma.contextRagChunk.findMany({
@@ -243,9 +247,23 @@ export class ChunkRepository {
     }
 
     /**
-     * Delete chunks by document ID
+     * Get chunks by type
+     * @implements IChunkRepository.getByType
      */
-    async deleteByDocumentId(documentId: string): Promise<number> {
+    async getByType(documentId: string, chunkType: ChunkType): Promise<VectorChunk[]> {
+        const chunks = await this.prisma.contextRagChunk.findMany({
+            where: { documentId, chunkType },
+            orderBy: { chunkIndex: 'asc' },
+        });
+
+        return chunks.map((c: Record<string, unknown>) => this.mapToVectorChunk(c));
+    }
+
+    /**
+     * Delete chunks by document ID
+     * @implements IChunkRepository.deleteByDocument
+     */
+    async deleteByDocument(documentId: string): Promise<number> {
         const result = await this.prisma.contextRagChunk.deleteMany({
             where: { documentId },
         });
@@ -254,12 +272,27 @@ export class ChunkRepository {
     }
 
     /**
-     * Count chunks by document ID
+     * @deprecated Use deleteByDocument instead
      */
-    async countByDocumentId(documentId: string): Promise<number> {
+    async deleteByDocumentId(documentId: string): Promise<number> {
+        return this.deleteByDocument(documentId);
+    }
+
+    /**
+     * Count chunks by document ID
+     * @implements IChunkRepository.countByDocument
+     */
+    async countByDocument(documentId: string): Promise<number> {
         return await this.prisma.contextRagChunk.count({
             where: { documentId },
         });
+    }
+
+    /**
+     * @deprecated Use countByDocument instead
+     */
+    async countByDocumentId(documentId: string): Promise<number> {
+        return this.countByDocument(documentId);
     }
 
     /**

@@ -10,52 +10,38 @@ import type { RagEnhancementConfig } from './rag-enhancement.types.js';
  */
 export interface PrismaClientLike {
     /** ContextRagPromptConfig model operations */
-    contextRagPromptConfig: PrismaModelOperations;
+    contextRagPromptConfig: any;
     /** ContextRagChunk model operations */
-    contextRagChunk: PrismaModelOperations;
+    contextRagChunk: any;
     /** ContextRagDocument model operations */
-    contextRagDocument: PrismaModelOperations;
+    contextRagDocument: any;
     /** ContextRagBatch model operations */
-    contextRagBatch: PrismaModelOperations;
+    contextRagBatch: any;
     /** Execute raw SQL query */
-    $executeRaw: (query: unknown, ...values: unknown[]) => Promise<number>;
+    $executeRaw: (query: any, ...values: any[]) => Promise<number>;
     /** Execute raw SQL query and return results */
-    $queryRaw: <T = unknown>(query: unknown, ...values: unknown[]) => Promise<T>;
+    $queryRaw: <T = any>(query: any, ...values: any[]) => Promise<T>;
     /** Execute raw SQL query (unsafe - for dynamic queries) */
-    $executeRawUnsafe: (query: string, ...values: unknown[]) => Promise<number>;
+    $executeRawUnsafe: (query: string, ...values: any[]) => Promise<number>;
     /** Query raw SQL (unsafe - for dynamic queries) */
-    $queryRawUnsafe: <T = unknown>(query: string, ...values: unknown[]) => Promise<T>;
+    $queryRawUnsafe: <T = any>(query: string, ...values: any[]) => Promise<T>;
     /** Transaction support */
-    $transaction: <T>(fn: (tx: PrismaClientLike) => Promise<T>) => Promise<T>;
+    $transaction: <T>(fn: (tx: any) => Promise<T>) => Promise<T>;
 }
 
-/**
- * Generic Prisma model operations interface.
- * Simplified to avoid complex generic constraints while maintaining type safety.
- */
+// Legacy interface kept for backward compatibility but currently unused in strict checks
 export interface PrismaModelOperations {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    create: (args: any) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    createMany: (args: any) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    findUnique: (args: any) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    findFirst: (args: any) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    findMany: (args?: any) => Promise<any[]>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    update: (args: any) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    updateMany: (args: any) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete: (args: any) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    deleteMany: (args: any) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    count: (args?: any) => Promise<number>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    aggregate: (args: any) => Promise<any>;
+    create(args: any): Promise<any>;
+    createMany(args: any): Promise<any>;
+    findUnique(args: any): Promise<any>;
+    findFirst(args: any): Promise<any>;
+    findMany(args?: any): Promise<any[]>;
+    update(args: any): Promise<any>;
+    updateMany(args: any): Promise<any>;
+    delete(args: any): Promise<any>;
+    deleteMany(args: any): Promise<any>;
+    count(args?: any): Promise<number>;
+    aggregate(args: any): Promise<any>;
 }
 
 /**
@@ -120,6 +106,19 @@ export interface RerankingConfig {
     defaultCandidates: number;
     /** Default top K to return after reranking */
     defaultTopK: number;
+}
+
+/**
+ * Embedding provider configuration
+ * Enables switching between different embedding providers (ISP compliance)
+ */
+export interface EmbeddingConfig {
+    /** Provider type: 'gemini' | 'openai' | 'cohere' */
+    provider: 'gemini' | 'openai' | 'cohere';
+    /** API key for the provider (falls back to main API key if not specified) */
+    apiKey?: string;
+    /** Model name for embeddings */
+    model?: string;
 }
 
 /**
@@ -188,14 +187,7 @@ export interface ContextRAGConfig {
      * Allows switching between different embedding providers
      * @example { provider: 'openai', model: 'text-embedding-3-large' }
      */
-    embeddingProvider?: {
-        /** Provider type: 'gemini' | 'openai' | 'cohere' */
-        provider: 'gemini' | 'openai' | 'cohere';
-        /** API key (uses main API key if not specified) */
-        apiKey?: string;
-        /** Model name for embeddings */
-        model?: string;
-    };
+    embeddingProvider?: EmbeddingConfig;
 }
 
 /**
@@ -254,6 +246,11 @@ export const DEFAULT_RERANKING_CONFIG: RerankingConfig = {
     provider: 'gemini',
     defaultCandidates: 50,
     defaultTopK: 10,
+};
+
+export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
+    provider: 'gemini',
+    model: 'text-embedding-004',
 };
 
 /**

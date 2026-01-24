@@ -12,7 +12,7 @@
  *   npx tsx examples/filtered-extraction-demo.ts
  */
 
-import { ContextRAG, IngestionError, SearchError, ContextRAGError } from '../src/index.js';
+import { createContextRAG, IngestionError, SearchError, ContextRAGError } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -49,7 +49,7 @@ async function main() {
 
     // Initialize Context-RAG with filtered configuration
     console.log('\n🔧 Initializing Context-RAG with filters...');
-    const rag = new ContextRAG({
+    const rag = createContextRAG({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         prisma: prisma as any,
         geminiApiKey: process.env.GEMINI_API_KEY!,

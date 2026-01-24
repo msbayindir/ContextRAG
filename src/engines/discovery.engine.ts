@@ -3,10 +3,9 @@ import type {
     DiscoveryResult,
     DiscoveryOptions,
 } from '../types/discovery.types.js';
-import { GeminiService } from '../services/gemini.service.js';
-import { PDFProcessor } from '../services/pdf.processor.js';
+import type { ILLMService } from '../types/llm-service.types.js';
+import type { IPDFProcessor } from '../types/pdf-processor.types.js';
 import type { Logger } from '../utils/logger.js';
-import { RateLimiter } from '../utils/rate-limiter.js';
 import { generateCorrelationId } from '../errors/index.js';
 import { DEFAULT_CHUNK_STRATEGY } from '../types/prompt.types.js';
 import { buildDiscoveryPrompt } from '../config/templates.js';
@@ -30,20 +29,35 @@ interface DiscoverySession {
  * 
  * Uses structured template system to analyze documents and generate
  * document-specific extraction instructions.
+ * 
+ * @example
+ * ```typescript
+ * const engine = new DiscoveryEngine(config, llmService, pdfProcessor, logger);
+ * const result = await engine.discover({ file: pdfBuffer });
+ * ```
  */
 export class DiscoveryEngine {
-    private readonly gemini: GeminiService;
-    private readonly pdfProcessor: PDFProcessor;
+    private readonly llm: ILLMService;
+    private readonly pdfProcessor: IPDFProcessor;
     private readonly logger: Logger;
     private readonly sessions: Map<string, DiscoverySession> = new Map();
 
+    /**
+     * Create a new DiscoveryEngine
+     * @param _config - Resolved configuration (reserved for future use)
+     * @param llm - LLM service for AI operations
+     * @param pdfProcessor - PDF processor service
+     * @param logger - Logger instance
+     */
     constructor(
-        config: ResolvedConfig,
-        rateLimiter: RateLimiter,
+        // @ts-expect-error Reserved for future configuration-based features
+        private readonly config: ResolvedConfig,
+        llm: ILLMService,
+        pdfProcessor: IPDFProcessor,
         logger: Logger
     ) {
-        this.gemini = new GeminiService(config, rateLimiter, logger);
-        this.pdfProcessor = new PDFProcessor(logger);
+        this.llm = llm;
+        this.pdfProcessor = pdfProcessor;
         this.logger = logger;
     }
 
@@ -58,17 +72,17 @@ export class DiscoveryEngine {
         // Load PDF
         const { buffer, metadata } = await this.pdfProcessor.load(options.file);
 
-        // Upload PDF to Gemini Files API (cache for analysis)
-        const fileUri = await this.gemini.uploadPdfBuffer(buffer, metadata.filename);
+        // Upload PDF to LLM provider (cache for analysis)
+        const fileUri = await this.llm.uploadDocument(buffer, metadata.filename);
 
         // Build discovery prompt from template
         const prompt = buildDiscoveryPrompt(options.documentTypeHint);
 
-        // Call Gemini with structured output (native JSON schema)
+        // Call LLM with structured output (native JSON schema)
         let analysisResult: DiscoveryResponse;
 
         try {
-            const response = await this.gemini.generateStructuredWithPdf<DiscoveryResponse>(
+            const response = await this.llm.generateStructuredWithDocument<DiscoveryResponse>(
                 fileUri,
                 prompt,
                 DiscoveryResponseSchema
@@ -102,7 +116,7 @@ export class DiscoveryEngine {
 
             // Fallback to legacy parsing
             try {
-                const response = await this.gemini.generateWithPdfUri(fileUri, prompt);
+                const response = await this.llm.generateWithDocument(fileUri, prompt);
                 let jsonStr = response.text;
                 const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/) || jsonStr.match(/```\s*([\s\S]*?)\s*```/);
                 if (jsonMatch?.[1]) {

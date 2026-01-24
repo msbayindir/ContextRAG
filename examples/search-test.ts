@@ -8,7 +8,7 @@
  *   npx tsx examples/search-test.ts
  */
 
-import { ContextRAG, SearchError, RerankingError, ContextRAGError } from '../src/index.js';
+import { createContextRAG, SearchError, RerankingError, ContextRAGError } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 
 // Check environment variables
@@ -36,7 +36,7 @@ async function main() {
         process.exit(1);
     }
 
-    const rag = new ContextRAG({
+    const rag = createContextRAG({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         prisma: prisma as any,
         geminiApiKey: process.env.GEMINI_API_KEY!,

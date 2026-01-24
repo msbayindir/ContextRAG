@@ -1,39 +1,25 @@
 import type { PrismaClientLike } from '../../types/config.types.js';
 import type { DocumentStatus } from '../../types/ingestion.types.js';
 import type { TokenUsage } from '../../types/chunk.types.js';
+import type { 
+    IDocumentRepository, 
+    CreateDocumentInput, 
+    UpdateDocumentInput 
+} from '../../types/repository.types.js';
 import { DocumentStatusEnum } from '../../types/enums.js';
 import { DatabaseError, NotFoundError } from '../../errors/index.js';
 
-interface CreateDocumentInput {
-    filename: string;
-    fileHash: string;
-    fileSize: number;
-    pageCount: number;
-    documentType?: string;
-    promptConfigId?: string;
-    totalBatches: number;
-    /** Experiment identifier for A/B testing */
-    experimentId?: string;
-    /** Model name used for processing */
-    modelName?: string;
-    /** Model configuration (temperature, maxTokens, etc.) */
-    modelConfig?: Record<string, unknown>;
-}
-
-interface UpdateDocumentInput {
-    status?: string;
-    completedBatches?: number;
-    failedBatches?: number;
-    tokenUsage?: TokenUsage;
-    processingMs?: number;
-    errorMessage?: string;
-    completedAt?: Date;
-}
+// Re-export types for backward compatibility
+export type { CreateDocumentInput, UpdateDocumentInput };
 
 /**
  * Repository for Document CRUD operations
+ * 
+ * Implements IDocumentRepository interface for dependency injection.
+ * 
+ * @implements {IDocumentRepository}
  */
-export class DocumentRepository {
+export class DocumentRepository implements IDocumentRepository {
     constructor(private readonly prisma: PrismaClientLike) { }
 
     /**

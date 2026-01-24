@@ -4,21 +4,18 @@ import * as path from 'path';
 import pdf from 'pdf-parse';
 import { hashBuffer } from '../utils/hash.js';
 import type { Logger } from '../utils/logger.js';
+import type { 
+    IPDFProcessor, 
+    PDFMetadata, 
+    PDFLoadResult, 
+    BatchSpec 
+} from '../types/pdf-processor.types.js';
+
+// Re-export types for backward compatibility
+export type { PDFMetadata, PDFLoadResult, BatchSpec };
 
 /**
- * PDF document metadata
- */
-export interface PDFMetadata {
-    filename: string;
-    fileHash: string;
-    fileSize: number;
-    pageCount: number;
-    title?: string;
-    author?: string;
-}
-
-/**
- * Page content extract
+ * @deprecated Use PDFLoadResult from pdf-processor.types.ts instead
  */
 export interface PageContent {
     pageNumber: number;
@@ -26,7 +23,7 @@ export interface PageContent {
 }
 
 /**
- * Batch of pages for processing
+ * @deprecated Use BatchSpec from pdf-processor.types.ts instead
  */
 export interface PageBatch {
     batchIndex: number;
@@ -37,8 +34,12 @@ export interface PageBatch {
 
 /**
  * PDF processing service
+ * 
+ * Implements IPDFProcessor interface for dependency injection.
+ * 
+ * @implements {IPDFProcessor}
  */
-export class PDFProcessor {
+export class PDFProcessor implements IPDFProcessor {
     private readonly logger: Logger;
 
     constructor(logger: Logger) {
@@ -47,11 +48,9 @@ export class PDFProcessor {
 
     /**
      * Load PDF from file path or buffer
+     * @implements IPDFProcessor.load
      */
-    async load(input: Buffer | string): Promise<{
-        buffer: Buffer;
-        metadata: PDFMetadata;
-    }> {
+    async load(input: Buffer | string): Promise<PDFLoadResult> {
         let buffer: Buffer;
         let filename: string;
 
@@ -97,17 +96,10 @@ export class PDFProcessor {
 
     /**
      * Split document into batches
+     * @implements IPDFProcessor.createBatches
      */
-    createBatches(pageCount: number, pagesPerBatch: number): Array<{
-        batchIndex: number;
-        pageStart: number;
-        pageEnd: number;
-    }> {
-        const batches: Array<{
-            batchIndex: number;
-            pageStart: number;
-            pageEnd: number;
-        }> = [];
+    createBatches(pageCount: number, pagesPerBatch: number): BatchSpec[] {
+        const batches: BatchSpec[] = [];
 
         for (let i = 0; i < pageCount; i += pagesPerBatch) {
             batches.push({
@@ -128,6 +120,7 @@ export class PDFProcessor {
 
     /**
      * Get page range description for prompts
+     * @implements IPDFProcessor.getPageRangeDescription
      */
     getPageRangeDescription(pageStart: number, pageEnd: number): string {
         if (pageStart === pageEnd) {

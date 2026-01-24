@@ -84,3 +84,13 @@ export const DEFAULT_CHUNK_STRATEGY: ChunkStrategy = {
     preserveLists: true,
     extractHeadings: true,
 };
+
+/**
+ * Default system prompt for document processing
+ */
+export const DEFAULT_SYSTEM_PROMPT = `You are an expert document analyst. Extract meaningful content from the document while preserving its structure and context. Focus on:
+- Key information and main concepts
+- Tables and structured data
+- Lists and enumerations  
+- Important quotes and references
+Format the output clearly with appropriate section markers.`;

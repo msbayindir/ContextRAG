@@ -4,8 +4,36 @@
  * @packageDocumentation
  */
 
-// Main class
-export { ContextRAG } from './context-rag.js';
+// Main class and factory (v2.0)
+export { ContextRAG, type ContextRAGDependencies } from './context-rag.js';
+export { ContextRAGFactory, createContextRAG } from './context-rag.factory.js';
+
+// Service Interfaces (v2.0)
+export type {
+    ILLMService,
+    LLMGenerateOptions,
+    LLMResponse,
+    LLMStructuredResult,
+} from './types/llm-service.types.js';
+
+export type {
+    IPDFProcessor,
+    PDFMetadata,
+    PDFLoadResult,
+    BatchSpec,
+} from './types/pdf-processor.types.js';
+
+export type {
+    IDocumentRepository,
+    IBatchRepository,
+    IChunkRepository,
+    IPromptConfigRepository,
+    CreateDocumentInput,
+    UpdateDocumentInput,
+    CreateBatchInput,
+    BatchRecord,
+    ChunkSearchResult,
+} from './types/repository.types.js';
 
 export type {
     ContextRAGConfig,

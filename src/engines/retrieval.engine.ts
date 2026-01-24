@@ -6,37 +6,64 @@ import type {
     SearchFilters,
 } from '../types/search.types.js';
 import type { RerankingConfig } from '../types/config.types.js';
-import { ChunkRepository } from '../database/repositories/chunk.repository.js';
-import { GeminiService } from '../services/gemini.service.js';
+import type { IChunkRepository } from '../types/repository.types.js';
+import type { ILLMService } from '../types/llm-service.types.js';
 import type { EmbeddingProvider } from '../types/embedding-provider.types.js';
-import { createReranker, type RerankerService } from '../services/reranker.service.js';
+import type { RerankerService } from '../services/reranker.service.js';
 import type { Logger } from '../utils/logger.js';
-import { RateLimiter } from '../utils/rate-limiter.js';
 import { SearchModeEnum } from '../types/enums.js';
 
 /**
+ * Dependencies required for RetrievalEngine
+ */
+export interface RetrievalEngineDependencies {
+    /** LLM service for AI operations */
+    llm: ILLMService;
+    /** Embedding provider for vector embeddings */
+    embeddingProvider: EmbeddingProvider;
+    /** Chunk repository for database operations */
+    chunkRepo: IChunkRepository;
+    /** Reranker service */
+    reranker: RerankerService;
+}
+
+/**
  * Retrieval engine for semantic and hybrid search
+ * 
+ * @example
+ * ```typescript
+ * const engine = new RetrievalEngine(config, dependencies, logger);
+ * const results = await engine.search({ query: 'test' });
+ * ```
  */
 export class RetrievalEngine {
-    private readonly chunkRepo: ChunkRepository;
-    private readonly gemini: GeminiService;
+    private readonly chunkRepo: IChunkRepository;
+    /** LLM service (reserved for query expansion) */
+    // Reserved for future query expansion feature
+    // @ts-expect-error Reserved for future use
+    private readonly _llm: ILLMService;
     private readonly embeddingProvider: EmbeddingProvider;
     private readonly logger: Logger;
     private readonly reranker: RerankerService;
     private readonly rerankingConfig: RerankingConfig;
 
+    /**
+     * Create a new RetrievalEngine
+     * @param config - Resolved configuration
+     * @param dependencies - All required dependencies
+     * @param logger - Logger instance
+     */
     constructor(
         config: ResolvedConfig,
-        embeddingProvider: EmbeddingProvider,
-        rateLimiter: RateLimiter,
+        dependencies: RetrievalEngineDependencies,
         logger: Logger
     ) {
-        this.chunkRepo = new ChunkRepository(config.prisma);
-        this.gemini = new GeminiService(config, rateLimiter, logger);
-        this.embeddingProvider = embeddingProvider;
+        this.chunkRepo = dependencies.chunkRepo;
+        this._llm = dependencies.llm;
+        this.embeddingProvider = dependencies.embeddingProvider;
         this.logger = logger;
         this.rerankingConfig = config.rerankingConfig;
-        this.reranker = createReranker(config, this.gemini, logger);
+        this.reranker = dependencies.reranker;
     }
 
     /**

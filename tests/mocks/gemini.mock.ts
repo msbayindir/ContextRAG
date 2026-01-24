@@ -1,12 +1,13 @@
 /**
  * Mock Gemini Service
  * 
- * Provides type-safe mocks for all GeminiService methods.
+ * Provides type-safe mocks for all GeminiService and ILLMService methods.
  * Returns sensible defaults that can be overridden per test.
  */
 
 import { vi } from 'vitest';
 import type { GeminiService, GeminiResponse, EmbeddingResponse } from '../../src/services/gemini.service.js';
+import type { ILLMService } from '../../src/types/llm-service.types.js';
 import type { TokenUsage } from '../../src/types/chunk.types.js';
 
 // Default token usage for mocked responses
@@ -165,4 +166,76 @@ export function createMockGeminiWithRateLimit(): MockGeminiService {
     });
 
     return mock;
+}
+
+/**
+ * Mock ILLMService type (v2.0 interface)
+ * 
+ * Use this for testing components that depend on ILLMService interface.
+ */
+export type MockLLMService = {
+    [K in keyof ILLMService]: ReturnType<typeof vi.fn>;
+};
+
+/**
+ * Create a mock ILLMService implementation
+ * 
+ * Follows the ILLMService interface for v2.0 dependency injection.
+ * Suitable for testing engines and services that depend on ILLMService.
+ * 
+ * @example
+ * ```typescript
+ * const mockLLM = createMockLLMService();
+ * const engine = new IngestionEngine(config, { llm: mockLLM, ... }, logger);
+ * 
+ * // Customize behavior
+ * mockLLM.generateStructuredWithDocument.mockResolvedValue({
+ *   data: customData,
+ *   tokenUsage: { input: 100, output: 50, total: 150 },
+ * });
+ * ```
+ */
+export function createMockLLMService(): MockLLMService {
+    return {
+        generate: vi.fn().mockResolvedValue({
+            text: 'Mock generated response',
+            tokenUsage: { ...DEFAULT_TOKEN_USAGE },
+        }),
+
+        generateWithVision: vi.fn().mockResolvedValue({
+            text: 'Mock vision response',
+            tokenUsage: { input: 200, output: 100, total: 300 },
+        }),
+
+        generateSimple: vi.fn().mockResolvedValue('Mock simple response'),
+
+        generateForReranking: vi.fn().mockResolvedValue(JSON.stringify([
+            { id: 'chunk-1', score: 0.9, reason: 'Highly relevant' },
+            { id: 'chunk-2', score: 0.7, reason: 'Somewhat relevant' },
+        ])),
+
+        uploadDocument: vi.fn().mockResolvedValue('files/mock-file-id-12345'),
+
+        generateWithDocument: vi.fn().mockResolvedValue({
+            text: 'Mock document response',
+            tokenUsage: { input: 500, output: 200, total: 700 },
+        }),
+
+        generateStructured: vi.fn().mockResolvedValue({
+            data: [],
+            tokenUsage: { ...DEFAULT_TOKEN_USAGE },
+        }),
+
+        generateStructuredWithDocument: vi.fn().mockResolvedValue({
+            data: [
+                {
+                    type: 'TEXT',
+                    page: 1,
+                    confidence: 0.92,
+                    content: 'Mock extracted content from structured output.',
+                },
+            ],
+            tokenUsage: { input: 500, output: 200, total: 700 },
+        }),
+    };
 }

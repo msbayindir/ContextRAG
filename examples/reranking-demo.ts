@@ -5,7 +5,7 @@
  * Shows full content to verify relevance quality.
  */
 
-import { ContextRAG, RerankingError, ContextRAGError } from '../src/index.js';
+import { createContextRAG, RerankingError, ContextRAGError } from '../src/index.js';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -17,7 +17,7 @@ const rerankerProvider = cohereApiKey ? 'cohere' : 'gemini';
 async function main() {
     console.log(`\n🔧 Reranker Provider: ${rerankerProvider.toUpperCase()}`);
 
-    const rag = new ContextRAG({
+    const rag = createContextRAG({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         prisma: prisma as any,
         geminiApiKey: process.env.GEMINI_API_KEY!,
