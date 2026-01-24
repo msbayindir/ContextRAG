@@ -12,6 +12,8 @@
  * Run: npx tsx examples/07-custom-engine.ts
  */
 
+import 'dotenv/config';
+
 import { ContextRAG, type ContextRAGDependencies } from '../src/context-rag.js';
 import { IngestionEngine, type IngestionEngineDependencies } from '../src/engines/ingestion.engine.js';
 import { RetrievalEngine, type RetrievalEngineDependencies } from '../src/engines/retrieval.engine.js';
@@ -145,7 +147,7 @@ async function main() {
     const { resolvedConfig, ingestionDeps, retrievalDeps, logger } = createDependencies(config);
 
     // Create custom ingestion engine
-    console.log('\\nCreating custom MetricsIngestionEngine...');
+    console.log('\nCreating custom MetricsIngestionEngine...');
     const customIngestion = new MetricsIngestionEngine(
         resolvedConfig,
         ingestionDeps,
@@ -192,12 +194,15 @@ async function main() {
 
     // Get metrics from custom engine
     const metrics = customIngestion.getMetrics();
-    console.log('\\nFinal Metrics:', metrics);
+    console.log('\nFinal Metrics:', metrics);
 
     await prisma.$disconnect();
-    console.log('\\nDone!');
+    console.log('\nDone!');
 }
 
 main().catch(console.error);
+
+
+
 
 

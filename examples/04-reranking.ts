@@ -11,7 +11,10 @@
  * Run: npx tsx examples/04-reranking.ts
  */
 
+import 'dotenv/config';
+
 import { createContextRAG } from '../src/index.js';
+
 import { PrismaClient } from '@prisma/client';
 
 async function main() {
@@ -27,6 +30,7 @@ async function main() {
         prisma,
         geminiApiKey: process.env.GEMINI_API_KEY!,
         // If using OpenAI/Anthropic as primary LLM, set llmProvider accordingly.
+        model: 'gemini-2.5-flash',
         rerankingConfig: {
             enabled: true,
             provider: 'gemini',
@@ -60,6 +64,7 @@ async function main() {
         const ragCohere = createContextRAG({
             prisma,
             geminiApiKey: process.env.GEMINI_API_KEY!,
+            model: 'gemini-2.5-flash',
             rerankingConfig: {
                 enabled: true,
                 provider: 'cohere',
@@ -114,5 +119,9 @@ async function main() {
 }
 
 main().catch(console.error);
+
+
+
+
 
 

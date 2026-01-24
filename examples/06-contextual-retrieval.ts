@@ -14,21 +14,27 @@
  * Run: npx tsx examples/06-contextual-retrieval.ts
  */
 
+import 'dotenv/config';
+
 import { createContextRAG } from '../src/index.js';
+
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 async function main() {
     console.log('Context-RAG Contextual Retrieval Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient();
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     const pdfPath = path.join(__dirname, 'test.pdf');
     const pdfBuffer = fs.readFileSync(pdfPath);
 
     // Strategy 1: No Context (Baseline)
-    console.log('\\nStrategy 1: No Context (Baseline)');
+    console.log('\nStrategy 1: No Context (Baseline)');
     
     const ragNone = createContextRAG({
         prisma,
@@ -47,7 +53,7 @@ async function main() {
     console.log(`    Baseline: ${baselineResult.chunkCount} chunks (no context)`);
 
     // Strategy 2: Simple Context (Free)
-    console.log('\\nStrategy 2: Simple Context (Template-based, Free)');
+    console.log('\nStrategy 2: Simple Context (Template-based, Free)');
     
     const ragSimple = createContextRAG({
         prisma,
@@ -67,7 +73,7 @@ async function main() {
     console.log(`    Simple: ${simpleResult.chunkCount} chunks (template context)`);
 
     // Strategy 3: LLM Context (Best Quality)
-    console.log('\\nStrategy 3: LLM Context (AI-generated, Best Quality)');
+    console.log('\nStrategy 3: LLM Context (AI-generated, Best Quality)');
     
     const ragLLM = createContextRAG({
         prisma,
@@ -91,7 +97,7 @@ async function main() {
     console.log(`    LLM: ${llmResult.chunkCount} chunks (AI context)`);
 
     // Compare search results
-    console.log('\\nComparing Search Quality...');
+    console.log('\nComparing Search Quality...');
     
     const query = 'What does the inhibitor block?';
     console.log(`   Query: "${query}"`);
@@ -115,9 +121,13 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\\nDone!');
+    console.log('\nDone!');
 }
 
 main().catch(console.error);
+
+
+
+
 
 

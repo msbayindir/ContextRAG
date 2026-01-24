@@ -12,7 +12,10 @@
  * Run: npx tsx examples/09-error-handling.ts
  */
 
+import 'dotenv/config';
+
 import { createContextRAG } from '../src/index.js';
+
 import {
     IngestionError,
     RerankingError,
@@ -196,9 +199,13 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\\nDone!');
+    console.log('\nDone!');
 }
 
 main().catch(console.error);
+
+
+
+
 
 

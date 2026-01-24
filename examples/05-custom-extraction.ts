@@ -17,10 +17,14 @@
  * Run: npx tsx examples/05-custom-extraction.ts
  */
 
+import 'dotenv/config';
+
 import { createContextRAG } from '../src/index.js';
+
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 async function main() {
     console.log('Context-RAG Custom Extraction Example\n');
@@ -44,11 +48,13 @@ async function main() {
         },
     });
 
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     const pdfPath = path.join(__dirname, 'test.pdf');
     const pdfBuffer = fs.readFileSync(pdfPath);
 
     // Example 1: Educational Content (Q&A extraction)
-    console.log('\\nExample 1: Educational Content (Q&A)');
+    console.log('\nExample 1: Educational Content (Q&A)');
     
     const educationalResult = await rag.ingest({
         file: pdfBuffer,
@@ -71,7 +77,7 @@ For each chunk, preserve the question number if present.
     console.log(`    Created ${educationalResult.chunkCount} educational chunks`);
 
     // Example 2: Legal Document
-    console.log('\\nExample 2: Legal Document');
+    console.log('\nExample 2: Legal Document');
     
     const legalResult = await rag.ingest({
         file: pdfBuffer,
@@ -94,7 +100,7 @@ Always include section/clause numbers when present.
     console.log(`    Created ${legalResult.chunkCount} legal chunks`);
 
     // Example 3: Medical Document
-    console.log('\\nExample 3: Medical Document');
+    console.log('\nExample 3: Medical Document');
     
     const medicalResult = await rag.ingest({
         file: pdfBuffer,
@@ -118,7 +124,7 @@ Preserve exact dosages and measurements.
     console.log(`    Created ${medicalResult.chunkCount} medical chunks`);
 
     // Search with subType filtering (NEW FEATURE!)
-    console.log('\\nSearching by subType (custom types)...');
+    console.log('\nSearching by subType (custom types)...');
     
     // Find all CLAUSE chunks from legal documents
     const clauses = await rag.search({
@@ -136,7 +142,7 @@ Preserve exact dosages and measurements.
     });
 
     // Search for medications in medical domain
-    console.log('\\nSearching for medications...');
+    console.log('\nSearching for medications...');
     
     const medications = await rag.search({
         query: 'drug dosage administration',
@@ -153,7 +159,7 @@ Preserve exact dosages and measurements.
     });
 
     // Search for exam questions in educational domain
-    console.log('\\nSearching for exam questions...');
+    console.log('\nSearching for exam questions...');
     
     const questions = await rag.search({
         query: 'exam questions about metabolism',
@@ -170,7 +176,7 @@ Preserve exact dosages and measurements.
     });
 
     // Cross-domain search for definitions
-    console.log('\\nCross-domain search for definitions...');
+    console.log('\nCross-domain search for definitions...');
     
     const definitions = await rag.search({
         query: 'definition meaning terminology',
@@ -187,9 +193,13 @@ Preserve exact dosages and measurements.
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\\nDone!');
+    console.log('\nDone!');
 }
 
 main().catch(console.error);
+
+
+
+
 
 

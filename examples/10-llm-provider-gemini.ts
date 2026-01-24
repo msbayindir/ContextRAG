@@ -4,10 +4,14 @@
  * Run: npx tsx examples/10-llm-provider-gemini.ts
  */
 
+import 'dotenv/config';
+
 import { createContextRAG } from '../src/index.js';
+
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 async function main() {
     console.log('Context-RAG LLM Provider Example: Gemini');
@@ -18,6 +22,8 @@ async function main() {
     }
 
     const prisma = new PrismaClient();
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     const pdfPath = path.join(__dirname, 'test.pdf');
     const pdfBuffer = fs.readFileSync(pdfPath);
 
@@ -52,5 +58,9 @@ async function main() {
 }
 
 main().catch(console.error);
+
+
+
+
 
 

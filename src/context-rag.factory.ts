@@ -120,7 +120,7 @@ export class ContextRAGFactory {
                 return {
                     ...resolved,
                     apiKey: resolved.apiKey ?? userConfig.geminiApiKey,
-                    model: resolved.model ?? (userConfig.model ?? 'gemini-1.5-pro'),
+                    model: resolved.model ?? (userConfig.model ?? 'gemini-2.5-flash'),
                 };
             }
 
@@ -133,7 +133,7 @@ export class ContextRAGFactory {
         return {
             prisma: userConfig.prisma,
             geminiApiKey: userConfig.geminiApiKey,
-            model: userConfig.model ?? 'gemini-1.5-pro',
+            model: userConfig.model ?? 'gemini-2.5-flash',
             embeddingModel: userConfig.embeddingModel ?? 'text-embedding-004',
             generationConfig: {
                 ...DEFAULT_GENERATION_CONFIG,

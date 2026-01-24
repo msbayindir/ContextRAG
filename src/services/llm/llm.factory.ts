@@ -13,7 +13,7 @@ import { CompositeLLMService } from './composite.service.js';
 type ProviderId = LLMProviderConfig['provider'];
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
-    gemini: 'gemini-1.5-pro',
+    gemini: 'gemini-2.5-flash',
     openai: 'gpt-4o-mini',
     anthropic: 'claude-3-5-sonnet-20240620',
 };

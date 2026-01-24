@@ -9,21 +9,27 @@
  * Run: npx tsx examples/08-embedding-providers.ts
  */
 
+import 'dotenv/config';
+
 import { createContextRAG } from '../src/index.js';
+
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 async function main() {
     console.log('Context-RAG Embedding Providers Example\n');
     console.log('='.repeat(50));
 
     const prisma = new PrismaClient();
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     const pdfPath = path.join(__dirname, 'test.pdf');
     const pdfBuffer = fs.readFileSync(pdfPath);
 
     // Provider 1: Gemini (Default)
-    console.log('\\nProvider 1: Gemini (Default)');
+    console.log('\nProvider 1: Gemini (Default)');
     console.log('   Model: text-embedding-004');
     console.log('   Dimensions: 768');
     
@@ -42,7 +48,7 @@ async function main() {
     console.log(`    Ingested with Gemini: ${geminiResult.chunkCount} chunks`);
 
     // Provider 2: OpenAI
-    console.log('\\nProvider 2: OpenAI');
+    console.log('\nProvider 2: OpenAI');
     
     if (process.env.OPENAI_API_KEY) {
         console.log('   Model: text-embedding-3-small');
@@ -70,7 +76,7 @@ async function main() {
     }
 
     // Provider 3: Cohere
-    console.log('\\nProvider 3: Cohere');
+    console.log('\nProvider 3: Cohere');
     
     if (process.env.COHERE_API_KEY) {
         console.log('   Model: embed-multilingual-v3.0');
@@ -108,9 +114,13 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\\nDone!');
+    console.log('\nDone!');
 }
 
 main().catch(console.error);
+
+
+
+
 
 

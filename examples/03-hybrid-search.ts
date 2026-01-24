@@ -9,7 +9,10 @@
  * Run: npx tsx examples/03-hybrid-search.ts
  */
 
+import 'dotenv/config';
+
 import { createContextRAG } from '../src/index.js';
+
 import { PrismaClient } from '@prisma/client';
 
 async function main() {
@@ -107,9 +110,13 @@ async function main() {
 
     // Cleanup
     await prisma.$disconnect();
-    console.log('\\nDone!');
+    console.log('\nDone!');
 }
 
 main().catch(console.error);
+
+
+
+
 
 
