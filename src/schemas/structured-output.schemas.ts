@@ -41,8 +41,10 @@ export type ChunkType = z.infer<typeof ChunkTypeSchema>;
  * Single section extracted from document
  */
 export const SectionSchema = z.object({
-    /** Content type */
+    /** Content type (standard type: TEXT, TABLE, LIST, etc.) */
     type: ChunkTypeSchema,
+    /** Custom sub-type for domain-specific classification (e.g., CLAUSE, MEDICATION, DEFINITION) */
+    subType: z.string().optional().describe("Custom sub-type for domain-specific content (e.g., CLAUSE, MEDICATION, DEFINITION). Use when user specifies custom types."),
     /** Source page number (1-indexed) */
     page: z.number().int().min(1).describe("The page number where this content starts."),
     /** Extraction confidence score (0.0-1.0) */

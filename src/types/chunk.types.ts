@@ -92,6 +92,10 @@ export interface VectorChunk {
     documentId: string;
     chunkIndex: number;
     chunkType: ChunkType;
+    /** Custom sub-type for domain-specific categorization (e.g., CLAUSE, MEDICATION) */
+    subType?: string;
+    /** Domain identifier (e.g., legal, medical, educational) */
+    domain?: string;
 
     /** Content optimized for vector search */
     searchContent: string;
@@ -114,6 +118,10 @@ export interface CreateChunkInput {
     documentId: string;
     chunkIndex: number;
     chunkType: ChunkType;
+    /** Custom sub-type for domain-specific categorization */
+    subType?: string;
+    /** Domain identifier */
+    domain?: string;
     searchContent: string;
     displayContent: string;
     /** Enriched content: context + searchContent (for RAG enhancement) */

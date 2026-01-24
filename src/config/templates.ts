@@ -116,6 +116,24 @@ Metabolism refers to all chemical reactions in an organism. It creates energy...
 - IMAGE_REF: Description of images, charts, figures.
 - QUESTION: Multiple choice questions.
 
+### Custom Sub-Types (Two-Level Type System):
+When the user specifies custom types (e.g., CLAUSE, MEDICATION, DEFINITION), 
+use the standard type above as the primary type, and add the custom type as a subType attribute.
+
+**Format with Custom Sub-Type:**
+\`\`\`
+<!-- SECTION type="TEXT" subType="CLAUSE" page="2" confidence="0.92" -->
+3.1 Payment Terms: The Client shall pay...
+<!-- /SECTION -->
+\`\`\`
+
+**Rules for Custom Types:**
+1. If user defines custom types → use them in subType attribute
+2. Always map to a standard type (TEXT, TABLE, LIST, etc.) as the primary type
+3. If no custom type applies → omit subType attribute
+
+{{CUSTOM_TYPES}}
+
 ### Format Rules:
 1. **Tables**: Use Markdown table format.
 2. **Lists**: Use consistent format (bullets or numbers).
@@ -158,6 +176,32 @@ export const STRUCTURED_EXTRACTION_TEMPLATE = `You are a document processing AI.
 
 Your goal is to extract content accurately, preserving the logical structure and semantics.
 
+## STANDARD TYPES
+Use these as the primary type for each chunk:
+- TEXT: Regular paragraphs, explanations, prose
+- TABLE: Tabular data, grids
+- LIST: Bulleted or numbered lists
+- HEADING: Section headers
+- CODE: Code snippets
+- QUOTE: Quoted text
+- IMAGE_REF: Image descriptions
+
+## CUSTOM SUB-TYPES (Two-Level Type System)
+If the user specifies custom types below, use them in the "subType" field.
+Always use a standard type above as the primary "type".
+
+{{CUSTOM_TYPES}}
+
+**Example with custom types:**
+\`\`\`json
+{
+  "type": "TEXT",
+  "subType": "CLAUSE",
+  "content": "3.1 Payment Terms: The Client shall pay...",
+  "page": 2
+}
+\`\`\`
+
 ## INSTRUCTIONS
 {{DOCUMENT_INSTRUCTIONS}}
 
@@ -167,6 +211,7 @@ Your goal is to extract content accurately, preserving the logical structure and
 3. **AVOID OVER-SEGMENTATION**: Combine related sentences into single TEXT blocks. Do not create a new section for every sentence.
 4. **PRESERVE ORIGINAL WORDING**: Keep exact terminology, especially for technical, medical, or legal terms.
 5. **NO INTERPRETATION**: Do not interpret or explain the content. Just extract it.
+6. **CUSTOM TYPES**: If user defined custom types, use them in subType field. Map to closest standard type.
 
 ## PAGE RANGE
 {{PAGE_RANGE}}
@@ -199,15 +244,76 @@ export const DEFAULT_DOCUMENT_INSTRUCTIONS = `
 // ============================================
 
 /**
+ * Extract custom types from document instructions (customPrompt).
+ * Looks for patterns like "- CLAUSE: description" or "- MEDICATION: description"
+ */
+export function extractCustomTypes(instructions: string[]): string[] {
+  const customTypes: string[] = [];
+  const standardTypes = new Set([
+    'TEXT', 'TABLE', 'LIST', 'HEADING', 'CODE', 'QUOTE', 'IMAGE_REF', 'QUESTION', 'MIXED'
+  ]);
+
+  for (const instruction of instructions) {
+    // Match patterns like "- CLAUSE:" or "MEDICATION:" at the start
+    const match = instruction.match(/^-?\s*([A-Z][A-Z_0-9]*)\s*:/);
+    if (match) {
+      const typeName = match[1];
+      // Only add if it's not a standard type
+      if (typeName && !standardTypes.has(typeName)) {
+        customTypes.push(typeName);
+      }
+    }
+  }
+
+  return customTypes;
+}
+
+/**
+ * Build custom types section for prompt injection
+ */
+function buildCustomTypesSection(customTypes: string[], instructions: string[]): string {
+  if (customTypes.length === 0) {
+    return ''; // No custom types defined
+  }
+
+  let section = `### User-Defined Custom Types:\n`;
+  section += `Use these in the "subType" field when content matches:\n\n`;
+  
+  for (const typeName of customTypes) {
+    // Find the original instruction for this type
+    const instruction = instructions.find(i => i.includes(`${typeName}:`));
+    if (instruction) {
+      section += `${instruction}\n`;
+    } else {
+      section += `- ${typeName}\n`;
+    }
+  }
+
+  section += `\n**Note:** Always use a standard type (TEXT, TABLE, etc.) as the primary type.\n`;
+  
+  return section;
+}
+
+/**
  * Build extraction prompt from discovery result
+ * @param documentInstructions - Instructions for document processing
+ * @param exampleFormats - Example formats for elements
+ * @param pageStart - Start page number
+ * @param pageEnd - End page number
+ * @param useStructuredOutput - Whether to use structured output template
+ * @param customTypes - Custom types extracted from customPrompt (auto-detected if not provided)
  */
 export function buildExtractionPrompt(
   documentInstructions: string[],
   exampleFormats?: Array<{ element: string; format: string }> | Record<string, string>,
   pageStart?: number,
   pageEnd?: number,
-  useStructuredOutput: boolean = false
+  useStructuredOutput: boolean = false,
+  customTypes?: string[]
 ): string {
+  // Auto-detect custom types if not provided
+  const detectedTypes = customTypes ?? extractCustomTypes(documentInstructions);
+
   // Build instructions section
   let instructionsBlock = documentInstructions
     .map(instruction => `- ${instruction}`)
@@ -243,11 +349,15 @@ export function buildExtractionPrompt(
     }
   }
 
+  // Build custom types section
+  const customTypesSection = buildCustomTypesSection(detectedTypes, documentInstructions);
+
   const template = useStructuredOutput ? STRUCTURED_EXTRACTION_TEMPLATE : BASE_EXTRACTION_TEMPLATE;
 
   return template
     .replace('{{DOCUMENT_INSTRUCTIONS}}', instructionsBlock || DEFAULT_DOCUMENT_INSTRUCTIONS)
-    .replace('{{PAGE_RANGE}}', pageRange);
+    .replace('{{PAGE_RANGE}}', pageRange)
+    .replace('{{CUSTOM_TYPES}}', customTypesSection);
 }
 
 /**
@@ -268,13 +378,16 @@ export function buildDiscoveryPrompt(documentTypeHint?: string): string {
 
 /**
  * Regex pattern to match SECTION blocks in AI output
- * Supports both formats:
- * - <!-- SECTION type="TEXT" page="1" confidence="0.9" --> (preferred)
+ * Supports formats:
+ * - <!-- SECTION type="TEXT" subType="CLAUSE" page="1" confidence="0.9" --> (with subType)
+ * - <!-- SECTION type="TEXT" page="1" confidence="0.9" --> (without subType)
  * - <!-- SECTION TEXT page="1" confidence="0.9" --> (legacy/fallback)
+ * 
+ * Groups: 1=type, 2=subType (optional), 3=page, 4=confidence, 5=content
  */
-export const SECTION_PATTERN = /<!-- SECTION (?:type=")?(\w+)"? page="(\d+)" confidence="([\d.]+)" -->\n?([\s\S]*?)\n?<!-- \/SECTION -->/g;
+export const SECTION_PATTERN = /<!-- SECTION (?:type=")?(\w+)"?(?:\s+subType="(\w+)")? page="(\d+)" confidence="([\d.]+)" -->\n?([\s\S]*?)\n?<!-- \/SECTION -->/g;
 
 /**
  * Regex pattern for single SECTION match
  */
-export const SECTION_PATTERN_SINGLE = /<!-- SECTION (?:type=")?(\w+)"? page="(\d+)" confidence="([\d.]+)" -->\n?([\s\S]*?)\n?<!-- \/SECTION -->/;
+export const SECTION_PATTERN_SINGLE = /<!-- SECTION (?:type=")?(\w+)"?(?:\s+subType="(\w+)")? page="(\d+)" confidence="([\d.]+)" -->\n?([\s\S]*?)\n?<!-- \/SECTION -->/;

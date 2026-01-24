@@ -13,6 +13,8 @@ import { ChunkTypeEnum, type ChunkTypeEnumType } from '../types/enums.js';
 export interface ParsedSection {
     /** Content type: TEXT, TABLE, LIST, etc. */
     type: ChunkTypeEnumType;
+    /** Custom sub-type for domain-specific classification (e.g., CLAUSE, MEDICATION) */
+    subType?: string;
     /** Source page number */
     page: number;
     /** AI confidence score (0.0 - 1.0) */
@@ -32,12 +34,12 @@ export interface ParsedSection {
  * @example
  * ```typescript
  * const output = `
- * <!-- SECTION type="TEXT" page="1" confidence="0.95" -->
+ * <!-- SECTION type="TEXT" subType="CLAUSE" page="1" confidence="0.95" -->
  * Some content here
  * <!-- /SECTION -->
  * `;
  * const sections = parseSections(output);
- * // [{ type: 'TEXT', page: 1, confidence: 0.95, content: 'Some content here', index: 0 }]
+ * // [{ type: 'TEXT', subType: 'CLAUSE', page: 1, confidence: 0.95, content: 'Some content here', index: 0 }]
  * ```
  */
 export function parseSections(aiOutput: string): ParsedSection[] {
@@ -49,16 +51,19 @@ export function parseSections(aiOutput: string): ParsedSection[] {
     let index = 0;
 
     while ((match = regex.exec(aiOutput)) !== null) {
+        // Groups: 1=type, 2=subType (optional), 3=page, 4=confidence, 5=content
         const typeStr = (match[1] ?? 'TEXT').toUpperCase();
-        const page = parseInt(match[2] ?? '1', 10);
-        const confidence = parseFloat(match[3] ?? '0.5');
-        const content = (match[4] ?? '').trim();
+        const subType = match[2] ?? undefined; // Optional subType
+        const page = parseInt(match[3] ?? '1', 10);
+        const confidence = parseFloat(match[4] ?? '0.5');
+        const content = (match[5] ?? '').trim();
 
         // Validate and map type
         const type = mapToChunkType(typeStr);
 
         sections.push({
             type,
+            subType,
             page,
             confidence: isNaN(confidence) ? 0.5 : Math.min(1, Math.max(0, confidence)),
             content,

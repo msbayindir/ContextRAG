@@ -376,6 +376,7 @@ export class IngestionEngine {
             promptConfigId ?? 'default',
             fileUri,
             metadata.filename,
+            options.domain,
             options.onProgress
         );
 
@@ -438,6 +439,7 @@ export class IngestionEngine {
         promptConfigId: string,
         fileUri: string, // [NEW] Files API URI
         filename: string,
+        domain: string | undefined,
         onProgress?: (status: BatchStatus) => void
     ): Promise<BatchResult[]> {
         const batches = await this.batchRepo.getByDocumentId(documentId);
@@ -459,6 +461,7 @@ export class IngestionEngine {
                         filename,
                         documentId,
                         totalBatches: batches.length,
+                        domain,
                     },
                     onProgress
                 )

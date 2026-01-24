@@ -45,6 +45,7 @@ export class BatchProcessor {
             filename: string;
             documentId: string;
             totalBatches: number;
+            domain?: string;
         },
         onProgress?: (status: BatchStatus) => void
     ): Promise<BatchResult> {
@@ -156,11 +157,19 @@ export class BatchProcessor {
                         type: chunkType // Ensure we use the mapped type (or original if types match)
                     });
 
+                    // Determine subType: prefer section.subType (from AI), fallback to originalType (from mapping)
+                    const subType = section.subType || originalType;
+
                     return {
                         promptConfigId: context.promptConfigId,
                         documentId: context.documentId,
                         chunkIndex: index,
                         chunkType: chunkType,
+                        // Preserve custom type in subType for filtering (e.g., CLAUSE, MEDICATION)
+                        // Priority: AI-detected subType > chunkTypeMapping originalType
+                        subType: subType,
+                        // Domain is passed from IngestOptions
+                        domain: context.domain,
                         searchContent: processed.searchContent, // Use processed content
                         displayContent: processed.displayContent,
                         sourcePageStart: section.page,
@@ -177,6 +186,7 @@ export class BatchProcessor {
                             parsedWithStructuredMarkers: true,
                             parsingMethod: 'gemini_response_schema',
                             originalType: originalType,
+                            subType: subType,
                         },
                     };
                 });

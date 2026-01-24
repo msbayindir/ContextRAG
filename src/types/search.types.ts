@@ -12,8 +12,12 @@ export type SearchMode = SearchModeEnumType;
 export interface SearchFilters {
     /** Filter by document types */
     documentTypes?: string[];
-    /** Filter by chunk types */
+    /** Filter by chunk types (TEXT, TABLE, CODE, etc.) */
     chunkTypes?: ChunkType[];
+    /** Filter by custom sub-types (CLAUSE, MEDICATION, QUESTION, etc.) */
+    subTypes?: string[];
+    /** Filter by domain (legal, medical, educational, etc.) */
+    domains?: string[];
     /** Minimum confidence score (0.0 - 1.0) */
     minConfidence?: number;
     /** Filter by specific document IDs */

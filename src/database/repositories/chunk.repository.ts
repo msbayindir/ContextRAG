@@ -25,7 +25,7 @@ export class ChunkRepository implements IChunkRepository {
             // Use raw query for vector insertion
             const result = await this.prisma.$queryRaw`
         INSERT INTO context_rag_chunks (
-          id, prompt_config_id, document_id, chunk_index, chunk_type,
+          id, prompt_config_id, document_id, chunk_index, chunk_type, sub_type, domain,
           search_content, enriched_content, context_text, search_vector, display_content,
           source_page_start, source_page_end, confidence_score, metadata, created_at
         ) VALUES (
@@ -34,6 +34,8 @@ export class ChunkRepository implements IChunkRepository {
           ${input.documentId},
           ${input.chunkIndex},
           ${input.chunkType},
+          ${input.subType ?? null},
+          ${input.domain ?? null},
           ${input.searchContent},
           ${input.enrichedContent ?? null},
           ${input.contextText ?? null},
@@ -75,7 +77,7 @@ export class ChunkRepository implements IChunkRepository {
 
                 const result = await tx.$queryRaw`
           INSERT INTO context_rag_chunks (
-            id, prompt_config_id, document_id, chunk_index, chunk_type,
+            id, prompt_config_id, document_id, chunk_index, chunk_type, sub_type, domain,
             search_content, enriched_content, context_text, search_vector, display_content,
             source_page_start, source_page_end, confidence_score, metadata, created_at
           ) VALUES (
@@ -84,6 +86,8 @@ export class ChunkRepository implements IChunkRepository {
             ${input.documentId},
             ${input.chunkIndex},
             ${input.chunkType},
+            ${input.subType ?? null},
+            ${input.domain ?? null},
             ${input.searchContent},
             ${input.enrichedContent ?? null},
             ${input.contextText ?? null},
@@ -134,6 +138,20 @@ export class ChunkRepository implements IChunkRepository {
             paramIndex++;
         }
 
+        // Filter by custom sub-types (e.g., CLAUSE, MEDICATION, DEFINITION)
+        if (filters?.subTypes?.length) {
+            whereConditions.push(`c.sub_type = ANY($${paramIndex})`);
+            params.push(filters.subTypes);
+            paramIndex++;
+        }
+
+        // Filter by domain (e.g., legal, medical, educational)
+        if (filters?.domains?.length) {
+            whereConditions.push(`c.domain = ANY($${paramIndex})`);
+            params.push(filters.domains);
+            paramIndex++;
+        }
+
         if (filters?.minConfidence !== undefined) {
             whereConditions.push(`c.confidence_score >= $${paramIndex}`);
             params.push(filters.minConfidence);
@@ -163,6 +181,7 @@ export class ChunkRepository implements IChunkRepository {
         const query = `
       SELECT 
         c.id, c.prompt_config_id, c.document_id, c.chunk_index, c.chunk_type,
+        c.sub_type, c.domain,
         c.search_content, c.display_content,
         c.source_page_start, c.source_page_end, c.confidence_score,
         c.metadata, c.created_at,
@@ -204,6 +223,20 @@ export class ChunkRepository implements IChunkRepository {
             paramIndex++;
         }
 
+        // Filter by custom sub-types (e.g., CLAUSE, MEDICATION, DEFINITION)
+        if (filters?.subTypes?.length) {
+            whereConditions.push(`c.sub_type = ANY($${paramIndex})`);
+            params.push(filters.subTypes);
+            paramIndex++;
+        }
+
+        // Filter by domain (e.g., legal, medical, educational)
+        if (filters?.domains?.length) {
+            whereConditions.push(`c.domain = ANY($${paramIndex})`);
+            params.push(filters.domains);
+            paramIndex++;
+        }
+
         if (filters?.documentIds?.length) {
             whereConditions.push(`c.document_id = ANY($${paramIndex})`);
             params.push(filters.documentIds);
@@ -215,6 +248,7 @@ export class ChunkRepository implements IChunkRepository {
         const queryStr = `
       SELECT 
         c.id, c.prompt_config_id, c.document_id, c.chunk_index, c.chunk_type,
+        c.sub_type, c.domain,
         c.search_content, c.display_content,
         c.source_page_start, c.source_page_end, c.confidence_score,
         c.metadata, c.created_at,
@@ -305,6 +339,8 @@ export class ChunkRepository implements IChunkRepository {
             documentId: (record['document_id'] ?? record['documentId']) as string,
             chunkIndex: (record['chunk_index'] ?? record['chunkIndex']) as number,
             chunkType: (record['chunk_type'] ?? record['chunkType']) as ChunkType,
+            subType: (record['sub_type'] ?? record['subType']) as string | undefined,
+            domain: record['domain'] as string | undefined,
             searchContent: (record['search_content'] ?? record['searchContent']) as string,
             displayContent: (record['display_content'] ?? record['displayContent']) as string,
             sourcePageStart: (record['source_page_start'] ?? record['sourcePageStart']) as number,

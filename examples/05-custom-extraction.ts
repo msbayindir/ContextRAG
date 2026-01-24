@@ -1,8 +1,13 @@
 /**
- * 05 - Custom Extraction
+ * 05 - Custom Extraction with SubTypes & Domains
  * 
  * Extract specific content types using custom prompts.
- * Useful when you know exactly what you're looking for.
+ * Custom types are automatically preserved in `subType` field for filtering.
+ * 
+ * Features:
+ * - Custom types (CLAUSE, MEDICATION, etc.) → stored in subType
+ * - Domain categorization (legal, medical, educational)
+ * - Efficient B-tree index filtering
  * 
  * Examples:
  * - Legal: Extract clauses, definitions, obligations
@@ -26,12 +31,16 @@ async function main() {
     const rag = createContextRAG({
         prisma,
         geminiApiKey: process.env.GEMINI_API_KEY!,
-        // Map custom types to system types
+        // Map custom types to standard ChunkType (optional)
+        // Custom types are preserved in subType for filtering
         chunkTypeMapping: {
             'QUESTION': 'TEXT',
             'ANSWER': 'TEXT',
             'DEFINITION': 'TEXT',
             'FORMULA': 'CODE',
+            'CLAUSE': 'TEXT',
+            'MEDICATION': 'TEXT',
+            'DIAGNOSIS': 'TEXT',
         },
     });
 
@@ -44,6 +53,7 @@ async function main() {
     const educationalResult = await rag.ingest({
         file: pdfBuffer,
         filename: 'educational-content.pdf',
+        domain: 'educational', // Domain for categorization
         customPrompt: `
 You are extracting educational content. Focus on:
 
@@ -66,6 +76,7 @@ For each chunk, preserve the question number if present.
     const legalResult = await rag.ingest({
         file: pdfBuffer,
         filename: 'legal-contract.pdf',
+        domain: 'legal', // Domain for categorization
         customPrompt: `
 You are extracting legal document content. Identify:
 
@@ -88,6 +99,7 @@ Always include section/clause numbers when present.
     const medicalResult = await rag.ingest({
         file: pdfBuffer,
         filename: 'medical-report.pdf',
+        domain: 'medical', // Domain for categorization
         customPrompt: `
 You are extracting medical/pharmaceutical content. Identify:
 
@@ -105,20 +117,72 @@ Preserve exact dosages and measurements.
 
     console.log(`   ✅ Created ${medicalResult.chunkCount} medical chunks`);
 
-    // Search with type filtering
-    console.log('\n🔍 Searching for specific types...');
+    // Search with subType filtering (NEW FEATURE!)
+    console.log('\n🔍 Searching by subType (custom types)...');
     
-    const questions = await rag.search({
-        query: 'exam questions about metabolism',
+    // Find all CLAUSE chunks from legal documents
+    const clauses = await rag.search({
+        query: 'payment terms and conditions',
         filters: {
-            chunkTypes: ['QUESTION'],
+            subTypes: ['CLAUSE', 'OBLIGATION'], // Filter by custom sub-types
+            domains: ['legal'], // Filter by domain
         },
         limit: 3,
     });
 
-    console.log(`   Found ${questions.length} QUESTION chunks`);
+    console.log(`   Found ${clauses.length} legal clauses`);
+    clauses.forEach((r, i) => {
+        console.log(`   ${i + 1}. [${r.chunk.subType}] ${r.chunk.displayContent.slice(0, 80)}...`);
+    });
+
+    // Search for medications in medical domain
+    console.log('\n💊 Searching for medications...');
+    
+    const medications = await rag.search({
+        query: 'drug dosage administration',
+        filters: {
+            subTypes: ['MEDICATION', 'CONTRAINDICATION'],
+            domains: ['medical'],
+        },
+        limit: 3,
+    });
+
+    console.log(`   Found ${medications.length} medication chunks`);
+    medications.forEach((r, i) => {
+        console.log(`   ${i + 1}. [${r.chunk.subType}] ${r.chunk.displayContent.slice(0, 80)}...`);
+    });
+
+    // Search for exam questions in educational domain
+    console.log('\n📝 Searching for exam questions...');
+    
+    const questions = await rag.search({
+        query: 'exam questions about metabolism',
+        filters: {
+            subTypes: ['QUESTION', 'ANSWER'],
+            domains: ['educational'],
+        },
+        limit: 3,
+    });
+
+    console.log(`   Found ${questions.length} question/answer chunks`);
     questions.forEach((r, i) => {
-        console.log(`   ${i + 1}. ${r.chunk.displayContent.slice(0, 100)}...`);
+        console.log(`   ${i + 1}. [${r.chunk.subType}] ${r.chunk.displayContent.slice(0, 80)}...`);
+    });
+
+    // Cross-domain search for definitions
+    console.log('\n📖 Cross-domain search for definitions...');
+    
+    const definitions = await rag.search({
+        query: 'definition meaning terminology',
+        filters: {
+            subTypes: ['DEFINITION'], // Search across all domains
+        },
+        limit: 5,
+    });
+
+    console.log(`   Found ${definitions.length} definitions from all domains`);
+    definitions.forEach((r, i) => {
+        console.log(`   ${i + 1}. [${r.chunk.domain}] ${r.chunk.displayContent.slice(0, 80)}...`);
     });
 
     // Cleanup

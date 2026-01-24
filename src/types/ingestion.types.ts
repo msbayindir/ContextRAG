@@ -47,6 +47,10 @@ export interface IngestOptions {
      * Allows same PDF to be processed multiple times with different configs
      */
     experimentId?: string;
+    /** Domain identifier for categorization (e.g., "legal", "medical", "educational")
+     * If not provided, system will attempt to auto-detect from document content
+     */
+    domain?: string;
     /** Progress callback */
     onProgress?: ProgressCallback;
     /** Skip if document already exists (based on hash + experimentId) */

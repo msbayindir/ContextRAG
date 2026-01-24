@@ -77,6 +77,15 @@ model ContextRagChunk {
   /// Type of content: TEXT, TABLE, LIST, CODE, HEADING, IMAGE_REF, QUOTE, MIXED
   chunkType String @map("chunk_type")
 
+  /// Custom sub-type for domain-specific categorization
+  /// e.g., "CLAUSE", "DEFINITION", "MEDICATION", "DIAGNOSIS", "QUESTION"
+  /// Preserved from custom prompts, enables fine-grained filtering
+  subType String? @map("sub_type")
+
+  /// Domain identifier for filtering (auto-detected or user-provided)
+  /// e.g., "legal", "medical", "educational", "technical"
+  domain String?
+
   /// Plain text content optimized for vector search (original)
   searchContent String @map("search_content") @db.Text
 
@@ -117,6 +126,9 @@ model ContextRagChunk {
   @@index([promptConfigId])
   @@index([documentId])
   @@index([chunkType])
+  @@index([subType])
+  @@index([domain])
+  @@index([chunkType, subType])
   @@index([confidenceScore])
   @@index([embeddingModel])
   @@map("context_rag_chunks")
