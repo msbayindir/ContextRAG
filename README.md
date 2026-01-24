@@ -72,7 +72,7 @@ console.log(results[0].chunk.displayContent);
 | 🐘 **PostgreSQL Native** | No external vector DB needed, uses pgvector |
 | ⚡ **Batch Processing** | Concurrent processing with automatic retry |
 | 🛡️ **Enterprise Error Handling** | Correlation IDs, graceful degradation, structured logging |
-| 🔌 **Dependency Injection** | SOLID-compliant architecture with interface-based DI (v2.0) |
+| 🔌 **Dependency Injection** | SOLID-compliant architecture with interface-based DI (v2.0-beta) |
 
 ---
 
@@ -179,13 +179,14 @@ const rag = createContextRAG({
 });
 
 // Discovery: AI analyzes the PDF and suggests extraction strategy
-const discovery = await rag.discover({ file: pdfBuffer, filename: 'biochemistry.pdf' });
+const discovery = await rag.discover({ file: pdfBuffer });
 
-// Ingest with discovered strategy
+// Ingest with approved strategy
+const approved = await rag.approveStrategy(discovery.id);
 await rag.ingest({
   file: pdfBuffer,
   filename: 'biochemistry.pdf',
-  promptConfig: discovery.promptConfig,  // AI-suggested prompts
+  promptConfigId: approved.id,
 });
 
 // Students can now ask contextual questions
@@ -230,11 +231,12 @@ const liabilityClauses = await rag.search({
 ```typescript
 // Process multiple document types
 for (const doc of ['hr-policy.pdf', 'security-guidelines.pdf', 'api-docs.pdf']) {
-  const discovery = await rag.discover({ file: docs[doc], filename: doc });
+  const discovery = await rag.discover({ file: docs[doc] });
+  const approved = await rag.approveStrategy(discovery.id);
   await rag.ingest({
     file: docs[doc],
     filename: doc,
-    promptConfig: discovery.promptConfig,
+    promptConfigId: approved.id,
     experimentId: 'knowledge-base-v1',  // Group related documents
   });
 }
@@ -602,8 +604,6 @@ await rag.ingest({
 
 ## ⚙️ Configuration
 
-```typescript
-## ⚙️ Configuration Reference
 
 Context-RAG is highly configurable. Below is the complete list of all available options.
 
@@ -892,7 +892,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 context-rag/
 ├── src/
 │   ├── context-rag.ts       # Main facade class
-│   ├── context-rag.factory.ts # DI Factory (v2.0)
+│   ├── context-rag.factory.ts # DI Factory (v2.0-beta)
 │   ├── engines/             # Discovery, Ingestion, Retrieval
 │   ├── enhancements/        # RAG Enhancement handlers
 │   │   └── anthropic/       # Anthropic Contextual Retrieval
@@ -911,11 +911,11 @@ context-rag/
 
 ---
 
-## 🔄 Migration Guide (v1.x → v2.0)
+## 🔄 Migration Guide (v1.x → v2.0-beta)
 
 ### Breaking Change: Factory Pattern
 
-v2.0 introduces proper Dependency Injection. The `new ContextRAG()` constructor now requires dependencies.
+v2.0-beta introduces proper Dependency Injection. The `new ContextRAG()` constructor now requires dependencies.
 
 **Before (v1.x):**
 ```typescript
@@ -927,7 +927,7 @@ const rag = new ContextRAG({
 });
 ```
 
-**After (v2.0):**
+**After (v2.0-beta):**
 ```typescript
 import { createContextRAG } from '@msbayindir/context-rag';
 
@@ -939,7 +939,7 @@ const rag = createContextRAG({
 
 ### Custom Engine Injection (Advanced)
 
-v2.0 allows injecting custom engines for advanced use cases:
+v2.0-beta allows injecting custom engines for advanced use cases:
 
 ```typescript
 import { ContextRAG, IngestionEngine } from '@msbayindir/context-rag';

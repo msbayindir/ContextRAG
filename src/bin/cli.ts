@@ -1,22 +1,123 @@
 #!/usr/bin/env node
 
+import 'dotenv/config';
 import { Command } from 'commander';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
+import type { EmbeddingProviderType } from '../types/embedding-provider.types.js';
+import type { EmbeddingProviderConfig } from '../types/embedding-provider.types.js';
+import type { ResolvedConfig } from '../types/config.types.js';
+import {
+    DEFAULT_BATCH_CONFIG,
+    DEFAULT_CHUNK_CONFIG,
+    DEFAULT_EMBEDDING_CONFIG,
+    DEFAULT_GENERATION_CONFIG,
+    DEFAULT_LOG_CONFIG,
+    DEFAULT_RATE_LIMIT_CONFIG,
+    DEFAULT_RERANKING_CONFIG,
+    DEFAULT_LLM_PROVIDER,
+} from '../types/config.types.js';
+import { createEmbeddingProvider } from '../providers/embedding-provider.factory.js';
+import { MigrationService } from '../services/migration.service.js';
+import { RateLimiter } from '../utils/rate-limiter.js';
+import { createLogger } from '../utils/logger.js';
+import pkg from '../../package.json' with { type: 'json' };
 
 const program = new Command();
 
 program
     .name('context-rag')
     .description('Context-RAG CLI - Setup and management tools')
-    .version('1.0.0-beta.11');
+    .version(pkg.version ?? '0.0.0');
+
+function getGeminiApiKey(): string {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error('GEMINI_API_KEY is required for this command.');
+    }
+    return apiKey;
+}
+
+function buildResolvedConfig(geminiApiKey: string, embeddingModel?: string): ResolvedConfig {
+    return {
+        prisma: {} as ResolvedConfig['prisma'],
+        geminiApiKey,
+        model: 'gemini-2.5-flash',
+        embeddingModel: embeddingModel ?? DEFAULT_EMBEDDING_CONFIG.model ?? 'text-embedding-004',
+        generationConfig: DEFAULT_GENERATION_CONFIG,
+        batchConfig: DEFAULT_BATCH_CONFIG,
+        chunkConfig: DEFAULT_CHUNK_CONFIG,
+        rateLimitConfig: DEFAULT_RATE_LIMIT_CONFIG,
+        logging: { ...DEFAULT_LOG_CONFIG, structured: false },
+        useStructuredOutput: true,
+        rerankingConfig: DEFAULT_RERANKING_CONFIG,
+        llmProvider: DEFAULT_LLM_PROVIDER,
+        documentProvider: DEFAULT_LLM_PROVIDER,
+    };
+}
+
+function normalizeProvider(provider?: string): EmbeddingProviderType {
+    const normalized = (provider ?? 'gemini').toLowerCase();
+    if (normalized === 'gemini' || normalized === 'openai' || normalized === 'cohere') {
+        return normalized;
+    }
+    throw new Error(`Unknown embedding provider: ${provider}`);
+}
+
+async function createMigrationService(options: {
+    provider?: EmbeddingProviderType;
+    model?: string;
+    apiKey?: string;
+    databaseUrl?: string;
+}): Promise<{ prisma: PrismaClient; migrationService: MigrationService }> {
+    const databaseUrl = options.databaseUrl ?? process.env.DATABASE_URL;
+    if (!databaseUrl) {
+        throw new Error('DATABASE_URL is required for this command.');
+    }
+
+    const provider = options.provider ?? 'gemini';
+    const geminiApiKey = provider === 'gemini'
+        ? options.apiKey ?? getGeminiApiKey()
+        : process.env.GEMINI_API_KEY ?? '';
+
+    const resolvedConfig = buildResolvedConfig(geminiApiKey, options.model);
+    const logger = createLogger(resolvedConfig.logging);
+    const rateLimiter = new RateLimiter(resolvedConfig.rateLimitConfig);
+
+    const providerConfig: EmbeddingProviderConfig = {
+        provider,
+        apiKey: options.apiKey,
+        model: options.model,
+    };
+
+    const embeddingProvider = createEmbeddingProvider(
+        resolvedConfig,
+        rateLimiter,
+        logger,
+        providerConfig
+    );
+
+    const prisma = new PrismaClient({
+        datasources: { db: { url: databaseUrl } },
+    });
+
+    const migrationService = new MigrationService(
+        prisma,
+        embeddingProvider,
+        resolvedConfig,
+        logger
+    );
+
+    return { prisma, migrationService };
+}
 
 program
     .command('init')
     .description('Initialize Context-RAG in your project')
     .option('-f, --force', 'Overwrite existing files')
     .action(async (options) => {
-        console.log('🚀 Initializing Context-RAG...\n');
+        console.log('Initializing Context-RAG...\\n');
 
         try {
             // Check if prisma directory exists
@@ -32,7 +133,7 @@ program
             }
 
             if (!schemaExists) {
-                console.log('❌ Prisma schema not found at prisma/schema.prisma');
+                console.log('Error: Prisma schema not found at prisma/schema.prisma');
                 console.log('   Please run `npx prisma init` first.\n');
                 process.exit(1);
             }
@@ -42,14 +143,14 @@ program
 
             // Check if Context-RAG models already exist
             if (existingSchema.includes('ContextRagChunk') && !options.force) {
-                console.log('⚠️  Context-RAG models already exist in schema.');
+                console.log('Warning: Context-RAG models already exist in schema.');
                 console.log('   Use --force to overwrite.\n');
                 process.exit(0);
             }
 
             // Check for pgvector extension
             if (!existingSchema.includes('postgresqlExtensions')) {
-                console.log('⚠️  Warning: pgvector extension not enabled.');
+                console.log('Warning: pgvector extension not enabled.');
                 console.log('   Add the following to your schema.prisma:\n');
                 console.log('   generator client {');
                 console.log('     provider = "prisma-client-js"');
@@ -196,15 +297,43 @@ model ContextRagBatch {
   @@index([status])
   @@map("context_rag_batches")
 }
+// ============================================
+// Context-RAG Models (END)
+// ============================================
 `;
 
             // Remove existing Context-RAG models if force
             let newSchema = existingSchema;
-            if (options.force && existingSchema.includes('// Context-RAG Models')) {
-                const startMarker = '// ============================================\n// Context-RAG Models';
+            const startMarker = '// ============================================\n// Context-RAG Models';
+            const endMarker = '// ============================================\n// Context-RAG Models (END)';
+
+            if (options.force) {
                 const startIndex = newSchema.indexOf(startMarker);
-                if (startIndex !== -1) {
+                const endIndex = newSchema.indexOf(endMarker);
+
+                if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+                    const endOfBlock = endIndex + endMarker.length;
+                    newSchema =
+                        newSchema.substring(0, startIndex).trim() +
+                        '\n\n' +
+                        newSchema.substring(endOfBlock).trim();
+                } else if (startIndex !== -1) {
                     newSchema = newSchema.substring(0, startIndex).trim();
+                } else {
+                    const modelNames = [
+                        'ContextRagPromptConfig',
+                        'ContextRagChunk',
+                        'ContextRagDocument',
+                        'ContextRagBatch',
+                    ];
+                    for (const modelName of modelNames) {
+                        const modelRegex = new RegExp(
+                            `model\\s+${modelName}\\s+\\{[\\s\\S]*?\\}\\s*`,
+                            'g'
+                        );
+                        newSchema = newSchema.replace(modelRegex, '');
+                    }
+                    newSchema = newSchema.trim();
                 }
             }
 
@@ -214,14 +343,14 @@ model ContextRagBatch {
             // Write updated schema
             await fs.writeFile(schemaPath, newSchema);
 
-            console.log('✅ Context-RAG models added to prisma/schema.prisma\n');
+            console.log('Done: Context-RAG models added to prisma/schema.prisma\\n');
             console.log('Next steps:');
             console.log('  1. Run: npx prisma migrate dev --name add_context_rag');
             console.log('  2. Enable pgvector in PostgreSQL: CREATE EXTENSION IF NOT EXISTS vector;');
             console.log('  3. Start using Context-RAG!\n');
 
         } catch (error) {
-            console.error('❌ Error:', (error as Error).message);
+            console.error('Error:', (error as Error).message);
             process.exit(1);
         }
     });
@@ -230,7 +359,7 @@ program
     .command('status')
     .description('Check Context-RAG setup status')
     .action(async () => {
-        console.log('🔍 Checking Context-RAG status...\n');
+        console.log('Checking Context-RAG status...\\n');
 
         // Check schema
         const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
@@ -238,41 +367,66 @@ program
             const schema = await fs.readFile(schemaPath, 'utf-8');
 
             console.log('Prisma Schema:');
-            console.log(`  ✅ schema.prisma found`);
-            console.log(`  ${schema.includes('ContextRagChunk') ? '✅' : '❌'} Context-RAG models`);
-            console.log(`  ${schema.includes('postgresqlExtensions') ? '✅' : '❌'} pgvector extension`);
+            console.log('  OK: schema.prisma found');
+            console.log(`  ${schema.includes('ContextRagChunk') ? 'OK' : 'MISSING'}: Context-RAG models`);
+            console.log(`  ${schema.includes('postgresqlExtensions') ? 'OK' : 'MISSING'}: pgvector extension`);
             console.log();
         } catch {
-            console.log('❌ prisma/schema.prisma not found\n');
+            console.log('MISSING: prisma/schema.prisma not found\\n');
         }
 
         // Check env - note: these are checked at runtime, not via centralized env
         // since CLI may run before env is fully configured
         console.log('Environment:');
-        console.log(`  ${process.env['DATABASE_URL'] ? '✅' : '❌'} DATABASE_URL`);
-        console.log(`  ${process.env['GEMINI_API_KEY'] ? '✅' : '❌'} GEMINI_API_KEY`);
-        console.log(`  ${process.env['COHERE_API_KEY'] ? '✅' : '⚪'} COHERE_API_KEY (optional)`);
+        console.log(`  ${process.env['DATABASE_URL'] ? 'OK' : 'MISSING'}: DATABASE_URL`);
+        console.log(`  ${process.env['GEMINI_API_KEY'] ? 'OK' : 'MISSING'}: GEMINI_API_KEY`);
+        console.log(`  ${process.env['COHERE_API_KEY'] ? 'OK' : 'OPTIONAL'}: COHERE_API_KEY`);
         console.log();
     });
 
 program
     .command('check-embeddings')
     .description('Check for embedding model mismatch between config and database')
-    .action(async () => {
-        console.log('🔍 Checking embedding model status...\n');
+    .option('-p, --provider <provider>', 'Embedding provider (gemini|openai|cohere)', 'gemini')
+    .option('-m, --model <model>', 'Embedding model override')
+    .option('-k, --api-key <key>', 'Embedding provider API key override')
+    .option('--database-url <url>', 'Database URL override')
+    .action(async (options) => {
+        console.log('Checking embedding model status...\n');
 
         try {
+            const provider = normalizeProvider(options.provider);
+            const { prisma, migrationService } = await createMigrationService({
+                provider,
+                model: options.model,
+                apiKey: options.apiKey,
+                databaseUrl: options.databaseUrl,
+            });
 
+            const mismatch = await migrationService.checkMismatch();
 
-            // We can't fully check without a configured client, so just show stats
-            console.log('⚠️  Full mismatch detection requires database connection.');
-            console.log('   Use this command programmatically with your Prisma client.\n');
-            console.log('Example:');
-            console.log('  import { detectEmbeddingMismatch } from "@msbayindir/context-rag";');
-            console.log('  const mismatch = await detectEmbeddingMismatch(prisma, provider);');
+            console.log('Embedding Status:');
+            console.log(`  Provider: ${mismatch.currentProvider}`);
+            console.log(`  Model: ${mismatch.currentModel}`);
+            console.log(`  Dimension: ${mismatch.currentDimension}`);
+            console.log(`  Total chunks: ${mismatch.totalChunks}`);
+            console.log(`  Chunks to migrate: ${mismatch.chunksToMigrate}`);
+            console.log(`  Mismatch: ${mismatch.hasMismatch ? 'YES' : 'NO'}`);
             console.log();
+
+            if (mismatch.existingModels.length > 0) {
+                console.log('Existing models in DB:');
+                for (const model of mismatch.existingModels) {
+                    console.log(
+                        `  - ${model.model ?? 'unknown'} (${model.dimension ?? 'unknown'}d): ${model.count}`
+                    );
+                }
+                console.log();
+            }
+
+            await prisma.$disconnect();
         } catch (error) {
-            console.error('❌ Error:', (error as Error).message);
+            console.error('Error:', (error as Error).message);
             process.exit(1);
         }
     });
@@ -283,28 +437,82 @@ program
     .option('-c, --concurrency <number>', 'Number of concurrent embedding calls', '5')
     .option('-b, --batch-size <number>', 'Batch size for processing', '50')
     .option('-d, --document-id <id>', 'Re-index specific document only')
+    .option('-p, --provider <provider>', 'Embedding provider (gemini|openai|cohere)', 'gemini')
+    .option('-m, --model <model>', 'Embedding model override')
+    .option('-k, --api-key <key>', 'Embedding provider API key override')
+    .option('--database-url <url>', 'Database URL override')
+    .option('--include-matching', 'Re-index even if embedding model matches')
     .action(async (options) => {
-        console.log('🔄 Starting re-indexing operation...\n');
+        console.log('Starting re-indexing operation...\n');
+
+        const concurrency = Number.parseInt(options.concurrency, 10);
+        const batchSize = Number.parseInt(options.batchSize, 10);
+        const documentIds = options.documentId
+            ? String(options.documentId)
+                .split(',')
+                .map((id) => id.trim())
+                .filter((id) => id.length > 0)
+            : undefined;
 
         console.log('Options:');
-        console.log(`  Concurrency: ${options.concurrency}`);
-        console.log(`  Batch size: ${options.batchSize}`);
-        if (options.documentId) {
-            console.log(`  Document ID: ${options.documentId}`);
+        console.log(`  Concurrency: ${concurrency}`);
+        console.log(`  Batch size: ${batchSize}`);
+        if (documentIds && documentIds.length > 0) {
+            console.log(`  Document IDs: ${documentIds.join(', ')}`);
         }
+        console.log(`  Include matching: ${options.includeMatching ? 'yes' : 'no'}`);
         console.log();
 
-        console.log('⚠️  Re-indexing requires database connection and embedding provider.');
-        console.log('   Use this command programmatically:\n');
-        console.log('Example:');
-        console.log('  import { MigrationService } from "@msbayindir/context-rag";');
-        console.log('  const migrationService = new MigrationService(prisma, provider, config, logger);');
-        console.log('  const result = await migrationService.reindex({');
-        console.log(`    concurrency: ${options.concurrency},`);
-        console.log(`    batchSize: ${options.batchSize},`);
-        console.log('    onProgress: (p) => console.log(`${p.processed}/${p.total}`)');
-        console.log('  });');
-        console.log();
+        try {
+            const provider = normalizeProvider(options.provider);
+            const { prisma, migrationService } = await createMigrationService({
+                provider,
+                model: options.model,
+                apiKey: options.apiKey,
+                databaseUrl: options.databaseUrl,
+            });
+
+            const result = await migrationService.reindex({
+                concurrency,
+                batchSize,
+                documentIds,
+                skipMatching: !options.includeMatching,
+                onProgress: (progress) => {
+                    const percent = progress.total > 0
+                        ? Math.round((progress.processed / progress.total) * 100)
+                        : 0;
+                    console.log(
+                        `Progress: ${progress.processed}/${progress.total} (${percent}%)` +
+                        ` | ok: ${progress.succeeded} | failed: ${progress.failed}`
+                    );
+                },
+            });
+
+            console.log('\nRe-indexing complete:');
+            console.log(`  Success: ${result.success ? 'yes' : 'no'}`);
+            console.log(`  Processed: ${result.totalProcessed}`);
+            console.log(`  Succeeded: ${result.succeeded}`);
+            console.log(`  Failed: ${result.failed}`);
+            console.log(`  New model: ${result.newModel}`);
+            console.log(`  Duration: ${Math.round(result.durationMs / 1000)}s`);
+
+            if (result.failures.length > 0) {
+                console.log('\nFailures:');
+                for (const failure of result.failures.slice(0, 20)) {
+                    console.log(`  - ${failure.chunkId}: ${failure.error}`);
+                }
+                if (result.failures.length > 20) {
+                    console.log(`  ...and ${result.failures.length - 20} more`);
+                }
+            }
+
+            await prisma.$disconnect();
+        } catch (error) {
+            console.error('Error:', (error as Error).message);
+            process.exit(1);
+        }
     });
 
 program.parse();
+
+

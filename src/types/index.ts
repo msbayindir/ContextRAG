@@ -8,7 +8,7 @@ export * from './ingestion.types.js';
 export * from './prompt.types.js';
 export * from './schemas.js';
 
-// Service interfaces (v2.0)
+// Service interfaces (v2.0-beta)
 export * from './llm-service.types.js';
 export * from './pdf-processor.types.js';
 export * from './repository.types.js';
