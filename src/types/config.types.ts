@@ -8,40 +8,42 @@ import type { RagEnhancementConfig } from './rag-enhancement.types.js';
  * Users should pass their generated PrismaClient instance which will
  * satisfy this interface if the Context-RAG models are properly defined.
  */
-export interface PrismaClientLike {
+export type PrismaClientLike = {
     /** ContextRagPromptConfig model operations */
-    contextRagPromptConfig: any;
+    contextRagPromptConfig?: unknown;
     /** ContextRagChunk model operations */
-    contextRagChunk: any;
+    contextRagChunk?: unknown;
     /** ContextRagDocument model operations */
-    contextRagDocument: any;
+    contextRagDocument?: unknown;
     /** ContextRagBatch model operations */
-    contextRagBatch: any;
+    contextRagBatch?: unknown;
     /** Execute raw SQL query */
-    $executeRaw: (query: any, ...values: any[]) => Promise<number>;
+    $executeRaw?: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
     /** Execute raw SQL query and return results */
-    $queryRaw: <T = any>(query: any, ...values: any[]) => Promise<T>;
+    $queryRaw?: <T = unknown>(query: TemplateStringsArray, ...values: unknown[]) => Promise<T>;
     /** Execute raw SQL query (unsafe - for dynamic queries) */
-    $executeRawUnsafe: (query: string, ...values: any[]) => Promise<number>;
+    $executeRawUnsafe?: (query: string, ...values: unknown[]) => Promise<unknown>;
     /** Query raw SQL (unsafe - for dynamic queries) */
-    $queryRawUnsafe: <T = any>(query: string, ...values: any[]) => Promise<T>;
+    $queryRawUnsafe?: <T = unknown>(query: string, ...values: unknown[]) => Promise<T>;
     /** Transaction support */
-    $transaction: <T>(fn: (tx: any) => Promise<T>) => Promise<T>;
-}
+    $transaction?: unknown;
+};
 
 // Legacy interface kept for backward compatibility but currently unused in strict checks
+export type PrismaModelArgs = Record<string, unknown>;
+
 export interface PrismaModelOperations {
-    create(args: any): Promise<any>;
-    createMany(args: any): Promise<any>;
-    findUnique(args: any): Promise<any>;
-    findFirst(args: any): Promise<any>;
-    findMany(args?: any): Promise<any[]>;
-    update(args: any): Promise<any>;
-    updateMany(args: any): Promise<any>;
-    delete(args: any): Promise<any>;
-    deleteMany(args: any): Promise<any>;
-    count(args?: any): Promise<number>;
-    aggregate(args: any): Promise<any>;
+    create(...args: unknown[]): Promise<unknown>;
+    createMany(...args: unknown[]): Promise<unknown>;
+    findUnique(...args: unknown[]): Promise<unknown>;
+    findFirst(...args: unknown[]): Promise<unknown>;
+    findMany(...args: unknown[]): Promise<unknown[]>;
+    update(...args: unknown[]): Promise<unknown>;
+    updateMany(...args: unknown[]): Promise<unknown>;
+    delete(...args: unknown[]): Promise<unknown>;
+    deleteMany(...args: unknown[]): Promise<unknown>;
+    count(...args: unknown[]): Promise<number>;
+    aggregate(...args: unknown[]): Promise<unknown>;
 }
 
 /**
