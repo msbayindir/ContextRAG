@@ -17,11 +17,11 @@
 ## ⚡ 60-Second Quick Start
 
 ```typescript
-import { ContextRAG } from '@msbayindir/context-rag';
+import { createContextRAG } from '@msbayindir/context-rag';
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 
-const rag = new ContextRAG({
+const rag = createContextRAG({
   prisma: new PrismaClient(),
   geminiApiKey: process.env.GEMINI_API_KEY!,
 });
@@ -72,6 +72,7 @@ console.log(results[0].chunk.displayContent);
 | 🐘 **PostgreSQL Native** | No external vector DB needed, uses pgvector |
 | ⚡ **Batch Processing** | Concurrent processing with automatic retry |
 | 🛡️ **Enterprise Error Handling** | Correlation IDs, graceful degradation, structured logging |
+| 🔌 **Dependency Injection** | SOLID-compliant architecture with interface-based DI (v2.0) |
 
 ---
 
@@ -167,7 +168,7 @@ flowchart TB
 **Scenario:** Turkish medical students preparing for TUS exam with 500+ page biochemistry PDFs.
 
 ```typescript
-const rag = new ContextRAG({
+const rag = createContextRAG({
   prisma,
   geminiApiKey: process.env.GEMINI_API_KEY!,
   ragEnhancement: {
@@ -407,12 +408,12 @@ COHERE_API_KEY="your-cohere-api-key"
 ## 🧩 Usage (Full Example)
 
 ```typescript
-import { ContextRAG } from '@msbayindir/context-rag';
+import { createContextRAG } from '@msbayindir/context-rag';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const rag = new ContextRAG({
+const rag = createContextRAG({
   prisma,
   geminiApiKey: process.env.GEMINI_API_KEY!,
   model: 'gemini-3-flash-preview',
@@ -471,7 +472,7 @@ the Cyanide test value for patient Ahmet Yılmaz. Value: 50 mg/dL"
 ### Configuration
 
 ```typescript
-const rag = new ContextRAG({
+const rag = createContextRAG({
   // ...
   ragEnhancement: {
     approach: 'anthropic_contextual',
@@ -504,7 +505,7 @@ Reranking improves search relevance by re-scoring candidates using AI models. Ba
 ### Configuration
 
 ```typescript
-const rag = new ContextRAG({
+const rag = createContextRAG({
   prisma,
   geminiApiKey: process.env.GEMINI_API_KEY!,
   
@@ -573,7 +574,7 @@ const result = await rag.ingest({
 ### Configuration for Selective Context Enrichment
 
 ```typescript
-const rag = new ContextRAG({
+const rag = createContextRAG({
   prisma,
   geminiApiKey: process.env.GEMINI_API_KEY!,
   
@@ -607,7 +608,7 @@ await rag.ingest({
 Context-RAG is highly configurable. Below is the complete list of all available options.
 
 ```typescript
-const rag = new ContextRAG({
+const rag = createContextRAG({
   // ============================================
   // CORE CONFIGURATION (Required)
   // ============================================
@@ -891,18 +892,73 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 context-rag/
 ├── src/
 │   ├── context-rag.ts       # Main facade class
+│   ├── context-rag.factory.ts # DI Factory (v2.0)
 │   ├── engines/             # Discovery, Ingestion, Retrieval
 │   ├── enhancements/        # RAG Enhancement handlers
 │   │   └── anthropic/       # Anthropic Contextual Retrieval
 │   ├── services/            # Gemini API, PDF Processor
+│   ├── providers/           # Embedding providers (Gemini, OpenAI, Cohere)
 │   ├── database/            # Prisma repositories
-│   ├── config/              # Templates
-│   ├── types/               # TypeScript types
+│   ├── config/              # Templates & constants
+│   ├── types/               # TypeScript types & interfaces
 │   ├── utils/               # Logger, Retry, RateLimiter
 │   └── errors/              # Custom error classes
 ├── examples/                # Demo scripts
+├── tests/                   # Unit & integration tests
 ├── prisma/                  # Reference schema
 └── dist/                    # Built output
+```
+
+---
+
+## 🔄 Migration Guide (v1.x → v2.0)
+
+### Breaking Change: Factory Pattern
+
+v2.0 introduces proper Dependency Injection. The `new ContextRAG()` constructor now requires dependencies.
+
+**Before (v1.x):**
+```typescript
+import { ContextRAG } from '@msbayindir/context-rag';
+
+const rag = new ContextRAG({
+  prisma,
+  geminiApiKey: 'your-key',
+});
+```
+
+**After (v2.0):**
+```typescript
+import { createContextRAG } from '@msbayindir/context-rag';
+
+const rag = createContextRAG({
+  prisma,
+  geminiApiKey: 'your-key',
+});
+```
+
+### Custom Engine Injection (Advanced)
+
+v2.0 allows injecting custom engines for advanced use cases:
+
+```typescript
+import { ContextRAG, IngestionEngine } from '@msbayindir/context-rag';
+
+// Create custom engine
+class MyIngestionEngine extends IngestionEngine {
+  async ingest(options) {
+    console.log('Custom logic!');
+    return super.ingest(options);
+  }
+}
+
+// Inject via constructor
+const rag = new ContextRAG(config, {
+  ingestionEngine: myCustomEngine,
+  retrievalEngine,
+  discoveryEngine,
+  repos: { promptConfig, document, chunk },
+});
 ```
 
 ---

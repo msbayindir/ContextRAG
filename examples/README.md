@@ -1,199 +1,39 @@
-# Context-RAG Demo Setup
+# 📚 Context-RAG Examples
 
-## Prerequisites
+This folder contains example scripts demonstrating Context-RAG v2.0 features.
 
-1. **PostgreSQL with pgvector**
-   ```bash
-   # macOS with Homebrew
-   brew install postgresql@15 pgvector
-   
-   # Start PostgreSQL
-   brew services start postgresql@15
-   
-   # Create database
-   createdb context_rag_demo
-   
-   # Install pgvector extension
-   psql -d context_rag_demo -c "CREATE EXTENSION IF NOT EXISTS vector"
+## 🚀 Quick Start
 
-   
-   ```
-
-2. **Environment Variables**
-   ```bash
-   export DATABASE_URL="postgresql://localhost/context_rag_demo"
-   export GEMINI_API_KEY="your-gemini-api-key"
-   
-   # Optional: For Cohere reranking (free tier: 10K/month)
-   export COHERE_API_KEY="your-cohere-api-key"
-   ```
-
-3. **Initialize Prisma Schema**
-   ```bash
-   # Add Context-RAG models to schema
-   npx context-rag init
-   
-   # Generate Prisma client and run migrations
-   npx prisma generate
-   npx prisma migrate dev --name init
-   ```
-
-## Documentation
-
-- **[Advanced Configuration & Scenarios](./ADVANCED_CONFIGURATION.md)**: Comprehensive guide on using different embedding providers (Gemini, OpenAI, Cohere), managing migrations, and setting up reranking.
-
-## Running the Demo
-
-1. Add a test PDF file:
-   ```bash
-   cp /path/to/your/document.pdf examples/test.pdf
-   ```
-
-2. Run the full demo:
-   ```bash
-   npx tsx examples/demo.ts
-   ```
-
-3. **NEW:** Run the filtered extraction demo:
-   ```bash
-   npx tsx examples/filtered-extraction-demo.ts
-   ```
-
-4. **NEW:** Run the reranking demo:
-   ```bash
-   npx tsx examples/reranking-demo.ts
-   ```
-
-### Filtered Extraction Demo
-
-The `filtered-extraction-demo.ts` demonstrates:
-- **Custom Prompt:** Extract only TEXT, QUESTION, LIST, TABLE (skip HEADING, CODE, etc.)
-- **Selective Context:** Context enrichment only for TEXT chunks (cost optimization)
-- **Search Filtering:** Query only specific chunk types
-
-### Reranking Demo
-
-The `reranking-demo.ts` demonstrates:
-- **Gemini Reranking:** Uses existing Gemini API quota (free)
-- **Cohere Reranking:** Uses Cohere rerank-multilingual-v3.0 (10K/month free)
-- **Comparison:** Shows before/after search results with reranking
-- **Analysis:** Displays which results were promoted or demoted
-
-Reranking improves search relevance by re-scoring top candidates using AI models, reducing retrieval failure rate by ~67% according to Anthropic's research.
-
-This is useful when you want to:
-- Extract specific content types from a document
-- Reduce context generation costs by skipping non-essential chunks
-- Focus RAG search on particular content categories
-
-## Expected Output
-
-```
-🧠 Context-RAG Demo
-
-==================================================
-
-📦 Initializing Prisma...
-✅ Database connected
-✅ pgvector extension found
-
-🔧 Initializing Context-RAG...
-
-🏥 Running health check...
-   Status: healthy
-   Database: ✅
-   pgvector: ✅
-
-📄 Found test PDF: examples/test.pdf
-
-==================================================
-🔍 DISCOVERY DEMO
-==================================================
-
-   Analyzing document...
-
-   📋 Discovery Results:
-      ID: abc123
-      Document Type: Technical
-      Confidence: 85.0%
-      Page Count: 10
-      Elements Detected: 3
-      Elements:
-        - table: 5
-        - list: 12
-        - heading: 8
-
-   💡 Suggested Strategy:
-      Max Tokens: 800
-      Split By: section
-      Preserve Tables: true
-
-   ✅ Approving strategy...
-      Created Prompt Config: xyz789
-
-==================================================
-📥 INGESTION DEMO
-==================================================
-
-   Processing document...
-
-   📦 Batch 1/2 PROCESSING pages 1-5
-   📦 Batch 1/2 COMPLETED pages 1-5
-   📦 Batch 2/2 PROCESSING pages 6-10
-   📦 Batch 2/2 COMPLETED pages 6-10
-
-   ✅ Ingestion Complete!
-      Document ID: doc-123
-      Status: COMPLETED
-      Chunks Created: 25
-      Batches: 2
-      Failed Batches: 0
-      Processing Time: 15234ms
-      Token Usage:
-        Input: 12500
-        Output: 8000
-        Total: 20500
-
-==================================================
-🔎 SEARCH DEMO
-==================================================
-
-   Query: "What is the main topic of this document?"
-
-   [1] Score: 0.892
-       Type: TEXT
-       Content: This document provides an overview of...
-
-==================================================
-📊 FINAL STATS
-==================================================
-
-   Documents: 1
-   Chunks: 25
-   Prompt Configs: 1
-   Storage: 128.50 KB
-
-✨ Demo complete!
-```
-
-## Troubleshooting
-
-### pgvector not found
-```sql
--- Manual installation
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
-### Prisma client errors
 ```bash
-npx prisma generate
+# Run any example
+npx tsx examples/01-basic-usage.ts
 ```
 
-### Rate limit errors
-Reduce concurrency:
-```typescript
-batchConfig: {
-    maxConcurrency: 1,
-    pagesPerBatch: 5,
-}
+## 📁 Examples
+
+| File | Description |
+|------|-------------|
+| [01-basic-usage.ts](./01-basic-usage.ts) | Basic ingest & search workflow |
+| [02-discovery-flow.ts](./02-discovery-flow.ts) | AI-powered document analysis |
+| [03-hybrid-search.ts](./03-hybrid-search.ts) | Semantic + keyword search |
+| [04-reranking.ts](./04-reranking.ts) | Gemini/Cohere reranking |
+| [05-custom-extraction.ts](./05-custom-extraction.ts) | Custom prompts for specific content |
+| [06-contextual-retrieval.ts](./06-contextual-retrieval.ts) | Anthropic-style context enhancement |
+| [07-custom-engine.ts](./07-custom-engine.ts) | Extending engines with custom logic |
+| [08-embedding-providers.ts](./08-embedding-providers.ts) | OpenAI/Cohere embeddings |
+| [09-error-handling.ts](./09-error-handling.ts) | Production error handling patterns |
+
+## ⚙️ Configuration
+
+All examples use environment variables:
+
+```env
+DATABASE_URL="postgresql://user:pass@localhost:5432/db"
+GEMINI_API_KEY="your-gemini-key"
+OPENAI_API_KEY="your-openai-key"      # Optional
+COHERE_API_KEY="your-cohere-key"      # Optional
 ```
+
+## 📄 Test PDF
+
+A sample `test.pdf` is included for testing. Replace with your own documents.
